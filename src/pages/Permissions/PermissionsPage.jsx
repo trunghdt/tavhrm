@@ -15,17 +15,39 @@ export default function PermissionsPage() {
 
   useEffect(() => { fetchUsers() }, [])
 
-  const fetchUsers = async () => {
-    setLoading(true)
-    const { data } = await supabase
-      .from('user_permissions')
-      .select('*')
-      .eq('is_active', true)
-      .order('granted_at', { ascending: false })
-    setUsers(data || [])
+const fetchUsers = async () => {
+  setLoading(true)
+
+  const { data: perms } = await supabase
+    .from('user_permissions')
+    .select('*')
+    .eq('is_active', true)
+    .order('granted_at', { ascending: false })
+
+  if (!perms || perms.length === 0) {
+    setUsers([])
     setLoading(false)
+    return
   }
 
+  // Lấy danh sách user_ids
+  const userIds = perms.map(p => p.user_id)
+
+  // Query employees theo user_id
+  const { data: employees } = await supabase
+    .from('employees')
+    .select('user_id, full_name, employee_code, position')
+    .in('user_id', userIds)
+
+  // Ghép dữ liệu
+  const merged = perms.map(p => ({
+    ...p,
+    employee: employees?.find(e => e.user_id === p.user_id) || null
+  }))
+
+  setUsers(merged)
+  setLoading(false)
+}
   const handleCreate = async (e) => {
     e.preventDefault()
     setCreating(true)
@@ -185,14 +207,21 @@ export default function PermissionsPage() {
             <tbody>
               {users.map(u => (
                 <tr key={u.id} style={styles.tr}>
-                  <td style={styles.td}>
-                    <div style={styles.nameCell}>
-                      <div style={{ ...styles.avatar, background: ROLE_COLORS[u.role] || '#6b7280' }}>
-                        {u.role?.[0]?.toUpperCase()}
-                      </div>
-                      <span style={styles.userId}>{u.user_id?.substring(0, 16)}...</span>
-                    </div>
-                  </td>
+<td style={styles.td}>
+  <div style={styles.nameCell}>
+<div style={{ ...styles.avatar, background: ROLE_COLORS[u.role] || '#6b7280' }}>
+  {u.employee?.full_name?.[0]?.toUpperCase() || 'U'}
+</div>
+<div>
+  <div style={styles.name}>
+    {u.employee?.full_name || 'Chưa liên kết hồ sơ'}
+  </div>
+  <div style={styles.sub}>
+    {u.employee?.employee_code ? `${u.employee.employee_code} · ` : ''}{u.employee?.position || u.user_id?.substring(0, 8) + '...'}
+  </div>
+</div>
+  </div>
+</td>
                   <td style={styles.td}>
                     <span style={{
                       ...styles.badge,
@@ -246,4 +275,6 @@ const styles = {
   avatar: { width: 32, height: 32, borderRadius: '50%', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13, flexShrink: 0 },
   userId: { fontFamily: 'monospace', fontSize: 13, color: '#6b7280' },
   badge: { padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 500 },
+  name: { fontWeight: 600, color: '#111827', fontSize: 14 },
+sub: { fontSize: 12, color: '#6b7280', marginTop: 2 },
 }
