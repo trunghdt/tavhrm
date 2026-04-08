@@ -28,18 +28,47 @@ export default function AddEmployeeForm({ onSuccess }) {
 
   const handleChange = e => setForm({ ...form, [e.target.name]: e.target.value })
 
-  const handleSubmit = async e => {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
-    const payload = { ...form }
-    if (!payload.end_date) delete payload.end_date
-    if (!payload.department_id) delete payload.department_id
-    const { error } = await supabase.from('employees').insert([payload])
-    if (error) setError(error.message)
-    else onSuccess()
+const handleSubmit = async e => {
+  e.preventDefault()
+  setLoading(true)
+  setError('')
+
+  const payload = { ...form }
+  if (!payload.end_date) delete payload.end_date
+  if (!payload.department_id) delete payload.department_id
+
+  // Thêm nhân viên vào database
+  const { data: newEmployee, error } = await supabase
+    .from('employees')
+    .insert([payload])
+    .select()
+    .single()
+
+  if (error) {
+    setError(error.message)
     setLoading(false)
+    return
   }
+
+  // Tự động tạo tài khoản
+  try {
+    await fetch('/api/create-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: `${form.employee_code.toLowerCase()}@tavhrm.internal`,
+        password: 'tav@12345',
+        role: 'employee',
+        employeeId: newEmployee.id,
+      }),
+    })
+  } catch (err) {
+    console.log('Tạo tài khoản lỗi:', err)
+  }
+
+  onSuccess()
+  setLoading(false)
+}
 
   return (
     <form onSubmit={handleSubmit} style={styles.form}>

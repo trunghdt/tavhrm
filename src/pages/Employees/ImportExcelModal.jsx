@@ -53,10 +53,38 @@ export default function ImportExcelModal({ onClose, onSuccess }) {
   address: String(r['Địa chỉ'] || ''),
 })).filter(e => e.employee_code && e.full_name)
 
-    const { error } = await supabase.from('employees').insert(employees)
-    if (error) setError(error.message)
-    else setDone(true)
-    setLoading(false)
+// Import nhân viên
+const { data: inserted, error } = await supabase
+  .from('employees')
+  .insert(employees)
+  .select()
+
+if (error) {
+  setError(error.message)
+  setLoading(false)
+  return
+}
+
+// Tự động tạo tài khoản cho từng nhân viên
+for (const emp of inserted) {
+  try {
+    await fetch('/api/create-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: `${emp.employee_code.toLowerCase()}@tavhrm.internal`,
+        password: 'tav@12345',
+        role: 'employee',
+        employeeId: emp.id,
+      }),
+    })
+  } catch (err) {
+    console.log('Lỗi tạo tài khoản:', emp.employee_code)
+  }
+}
+
+setDone(true)
+setLoading(false)
   }
 
   const downloadTemplate = async () => {
