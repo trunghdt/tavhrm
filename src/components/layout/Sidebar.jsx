@@ -1,17 +1,21 @@
 import { useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-
-const menuItems = [
-  { path: '/', icon: '📊', label: 'Dashboard' },
-  { path: '/employees', icon: '👥', label: 'Nhân viên' },
-  { path: '/evaluations', icon: '⭐', label: 'Đánh giá' },
-  { path: '/salary-review', icon: '💰', label: 'Tăng lương' },
-  { path: '/permissions', icon: '🔐', label: 'Phân quyền' },
-]
+import { useAuthStore } from '../../store/authStore'
 
 export default function Sidebar() {
   const navigate = useNavigate()
   const location = useLocation()
+  const { role } = useAuthStore()
+
+  const allMenuItems = [
+    { path: '/', icon: '📊', label: 'Dashboard', roles: ['board_manager', 'hr', 'manager', 'employee'] },
+    { path: '/employees', icon: '👥', label: 'Nhân viên', roles: ['board_manager', 'hr', 'manager'] },
+    { path: '/evaluations', icon: '⭐', label: 'Đánh giá', roles: ['board_manager', 'hr', 'manager'] },
+    { path: '/salary-review', icon: '💰', label: 'Tăng lương', roles: ['board_manager', 'hr', 'manager'] },
+    { path: '/permissions', icon: '🔐', label: 'Phân quyền', roles: ['board_manager'] },
+  ]
+
+  const menuItems = allMenuItems.filter(item => item.roles.includes(role))
 
   return (
     <div style={styles.sidebar}>
@@ -56,7 +60,6 @@ const styles = {
   menuItem: {
     display: 'flex', alignItems: 'center', gap: 10, padding: '11px 20px',
     color: '#cbd5e1', cursor: 'pointer', fontSize: 14, fontWeight: 500,
-    transition: 'all 0.15s',
   },
   menuItemActive: {
     background: '#1a56db', color: '#fff', borderRadius: '0 8px 8px 0',

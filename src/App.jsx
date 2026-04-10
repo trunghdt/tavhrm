@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { supabase } from './lib/supabase'
+import { useAuthStore } from './store/authStore'
 import LoginPage from './pages/Auth/LoginPage'
 import AppLayout from './components/layout/AppLayout'
 import DashboardPage from './pages/Dashboard/DashboardPage'
@@ -8,17 +9,22 @@ import EmployeesPage from './pages/Employees/EmployeesPage'
 import EvaluationsPage from './pages/Evaluations/EvaluationsPage'
 import SalaryReviewPage from './pages/SalaryReview/SalaryReviewPage'
 import PermissionsPage from './pages/Permissions/PermissionsPage'
+import ChangePasswordPage from './pages/Auth/ChangePasswordPage'
 
 function App() {
   const [user, setUser] = useState(undefined)
+  const { fetchProfile, role } = useAuthStore()
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
+      if (session?.user) fetchProfile(session.user.id)
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
+      if (session?.user) fetchProfile(session.user.id)
+      else useAuthStore.setState({ role: null, profile: null, permissions: null })
     })
 
     return () => subscription.unsubscribe()
