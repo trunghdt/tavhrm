@@ -66,7 +66,16 @@ export default function ExportExcelModal({ onClose }) {
     setLoading(false)
     onClose()
   }
-
+const buildDeptOptions = (depts, parentId = null, level = 0) => {
+  return depts
+    .filter(d => d.parent_id === parentId)
+    .flatMap(d => [
+      <option key={d.id} value={d.id}>
+        {'　'.repeat(level)}{level > 0 ? '└ ' : ''}{d.name}
+      </option>,
+      ...buildDeptOptions(depts, d.id, level + 1)
+    ])
+}
   return (
     <div style={styles.overlay} onClick={onClose}>
       <div style={styles.modal} onClick={e => e.stopPropagation()}>
@@ -84,9 +93,7 @@ export default function ExportExcelModal({ onClose }) {
               onChange={e => setSelectedDept(e.target.value)}
             >
               <option value="">🏢 Toàn công ty</option>
-              {departments.map(d => (
-                <option key={d.id} value={d.id}>{d.name}</option>
-              ))}
+             {buildDeptOptions(departments)}
             </select>
           </div>
 

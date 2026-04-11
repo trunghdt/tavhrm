@@ -26,96 +26,139 @@ export default function ImportExcelModal({ onClose, onSuccess }) {
     }
   }
 
-  const handleImport = async () => {
-    if (rows.length === 0) return
-    setLoading(true)
-    setError('')
+const handleImport = async () => {
+  if (rows.length === 0) return
+  setLoading(true)
+  setError('')
 
-   const employees = rows.map(r => ({
-  employee_code: String(r['Mã nhân viên'] || ''),
-  full_name: String(r['Họ tên'] || ''),
-  branch: String(r['Chi nhánh'] || ''),
-  team: String(r['Tổ'] || ''),
-  phone: String(r['Số điện thoại'] || ''),
-  personal_email: String(r['Email'] || ''),
-  gender: r['Giới tính'] === 'Nữ' ? 'female' : 'male',
-  national_id: String(r['CCCD'] || ''),
-  tax_code: String(r['Mã số thuế'] || ''),
-  bank_account: String(r['Số TK'] || ''),
-  bank_name: String(r['Ngân hàng'] || ''),
-  employment_type: 
-    r['Loại HĐ'] === 'Hợp đồng thử việc' ? 'thu_viec' :
-    r['Loại HĐ'] === 'Hợp đồng thời vụ' ? 'thoi_vu' :
-    r['Loại HĐ'] === 'Hợp đồng có thời hạn' ? 'co_thoi_han' : 'vo_thoi_han',
-  status: r['Trạng thái'] === 'Đã nghỉ' ? 'inactive' : r['Trạng thái'] === 'Thử việc' ? 'probation' : 'active',
-  start_date: r['Ngày vào'] || null,
-  end_date: r['Ngày nghỉ'] || null,
-  address: String(r['Địa chỉ'] || ''),
-  _salary: Number(r['Mức lương'] || 0), // temp field
-})).filter(e => e.employee_code && e.full_name)
+  // Fetch tất cả departments để map tên → ID
+  const { data: allDepts } = await supabase
+    .from('departments')
+    .select('*')
+    .eq('is_active', true)
 
-// Import nhân viên
-const { data: inserted, error } = await supabase
-  .from('employees')
-  .insert(employees)
-  .select()
+    // Tìm chi nhánh
+ const findDeptId = (branchName, deptName, teamName) => {
+  if (!allDepts || !branchName?.trim()) return null
 
-if (error) {
-  setError(error.message)
-  setLoading(false)
-  return
+  // Tìm chi nhánh (không có parent)
+  const branch = allDepts.find(d =>
+    !d.parent_id &&
+    d.name?.toLowerCase().trim() === branchName?.toLowerCase().trim()
+  )
+  if (!branch) return null
+  if (!deptName?.trim()) return branch.id
+
+  // Tìm bộ phận (parent là chi nhánh)
+  const dept = allDepts.find(d =>
+    d.parent_id === branch.id &&
+    d.name?.toLowerCase().trim() === deptName?.toLowerCase().trim()
+  )
+  if (!dept) return branch.id
+  if (!teamName?.trim()) return dept.id
+
+  // Tìm tổ (parent là bộ phận)
+  const team = allDepts.find(d =>
+    d.parent_id === dept.id &&
+    d.name?.toLowerCase().trim() === teamName?.toLowerCase().trim()
+  )
+  return team?.id || dept.id
 }
-// Lưu salary_records cho nhân viên có mức lương
-const salaryRecords = inserted
-  .filter(emp => {
-    const row = rows.find(r => String(r['Mã nhân viên']) === emp.employee_code)
-    return row && Number(row['Mức lương']) > 0
-  })
-  .map(emp => {
-    const row = rows.find(r => String(r['Mã nhân viên']) === emp.employee_code)
+
+  const employees = rows.map(r => {
+    const branchName = String(r['Chi nhánh'] || '')
+    const deptName = String(r['Phòng ban'] || '')
+    const teamName = String(r['Tổ'] || '')
+    const deptId = findDeptId(branchName, deptName, teamName)
+
     return {
-      employee_id: emp.id,
-      base_salary: Number(row['Mức lương']),
-      salary_type: 'time_based',
-      effective_date: emp.start_date || new Date().toISOString().split('T')[0],
-      change_reason: 'Lương khởi điểm',
+      employee_code: String(r['Mã nhân viên'] || ''),
+      full_name: String(r['Họ tên'] || ''),
+      branch: branchName,
+      team: teamName,
+      position: String(r['Chức vụ'] || ''),
+      phone: String(r['Số điện thoại'] || ''),
+      personal_email: String(r['Email'] || ''),
+      gender: r['Giới tính'] === 'Nữ' ? 'female' : 'male',
+      national_id: String(r['CCCD'] || ''),
+      tax_code: String(r['Mã số thuế'] || ''),
+      bank_account: String(r['Số TK'] || ''),
+      bank_name: String(r['Ngân hàng'] || ''),
+      employment_type:
+        r['Loại HĐ'] === 'Hợp đồng thử việc' ? 'thu_viec' :
+        r['Loại HĐ'] === 'Hợp đồng thời vụ' ? 'thoi_vu' :
+        r['Loại HĐ'] === 'Hợp đồng có thời hạn' ? 'co_thoi_han' : 'vo_thoi_han',
+      status: r['Trạng thái'] === 'Đã nghỉ' ? 'inactive' : r['Trạng thái'] === 'Thử việc' ? 'probation' : 'active',
+      start_date: r['Ngày vào'] || null,
+      end_date: r['Ngày nghỉ'] || null,
+      address: String(r['Địa chỉ'] || ''),
+      department_id: deptId || null,
     }
-  })
+  }).filter(e => e.employee_code && e.full_name)
 
-if (salaryRecords.length > 0) {
-  await supabase.from('salary_records').insert(salaryRecords)
-}
+  // Import nhân viên
+  const { data: inserted, error } = await supabase
+    .from('employees')
+    .insert(employees)
+    .select()
 
-// Tự động tạo tài khoản cho từng nhân viên
-for (const emp of inserted) {
-  try {
-    await fetch('/api/create-user', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: `${emp.employee_code.toLowerCase()}@tavhrm.internal`,
-        password: 'tav@12345',
-        role: 'employee',
-        employeeId: emp.id,
-      }),
+  if (error) {
+    setError(error.message)
+    setLoading(false)
+    return
+  }
+
+  // Lưu salary_records cho nhân viên có mức lương
+  const salaryRecords = inserted
+    .filter(emp => {
+      const row = rows.find(r => String(r['Mã nhân viên']) === emp.employee_code)
+      return row && Number(row['Mức lương']) > 0
     })
-  } catch (err) {
-    console.log('Lỗi tạo tài khoản:', emp.employee_code)
-  }
-}
+    .map(emp => {
+      const row = rows.find(r => String(r['Mã nhân viên']) === emp.employee_code)
+      return {
+        employee_id: emp.id,
+        base_salary: Number(row['Mức lương']),
+        salary_type: 'time_based',
+        effective_date: emp.start_date || new Date().toISOString().split('T')[0],
+        change_reason: 'Lương khởi điểm',
+      }
+    })
 
-setDone(true)
-setLoading(false)
+  if (salaryRecords.length > 0) {
+    await supabase.from('salary_records').insert(salaryRecords)
   }
+
+  // Tạo tài khoản cho từng nhân viên
+  for (const emp of inserted) {
+    try {
+      await fetch('/api/create-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: `${emp.employee_code.toLowerCase()}@tavhrm.internal`,
+          password: 'tav@12345',
+          role: 'employee',
+          employeeId: emp.id,
+        }),
+      })
+    } catch (err) {
+      console.log('Lỗi tạo tài khoản:', emp.employee_code)
+    }
+  }
+
+  setDone(true)
+  setLoading(false)
+}
 
   const downloadTemplate = async () => {
     const XLSX = await import('xlsx')
   const template = [{
   'Mã nhân viên': 'NV006',
   'Họ tên': 'Nguyễn Văn A',
-  'Chi nhánh': 'Hà Nội',
-  'Phòng ban': 'Kỹ thuật',
-  'Tổ': 'Tổ 1',
+  'Chi nhánh': 'TAV BN',
+  'Bộ phận': 'Sản xuất',
+  'Tổ': 'Chuyền may 1',
   'Số điện thoại': '0901234567',
   'Email': 'a.nv@company.com',
   'Giới tính': 'Nam',

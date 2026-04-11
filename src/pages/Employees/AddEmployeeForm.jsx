@@ -8,8 +8,7 @@ const EMPLOYMENT_TYPES = [
   { value: 'vo_thoi_han', label: 'Hợp đồng vô thời hạn' },
 ]
 
-export default function AddEmployeeForm({ onSuccess }) {
-  const [departments, setDepartments] = useState([])
+export default function AddEmployeeForm({ onSuccess, departments = [] }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [form, setForm] = useState({
@@ -19,13 +18,9 @@ export default function AddEmployeeForm({ onSuccess }) {
     bank_name: '', employment_type: 'co_thoi_han', status: 'active',
     start_date: '', end_date: '', address: '',
   })
+  const [selectedBranchId, setSelectedBranchId] = useState('')
+  const [selectedDeptId, setSelectedDeptId] = useState('')
   const [currentSalary, setCurrentSalary] = useState('')
-
-  useEffect(() => {
-    supabase.from('departments').select('*').eq('is_active', true).then(({ data }) => {
-      setDepartments(data || [])
-    })
-  }, [])
 
   const handleChange = e => setForm({ ...form, [e.target.name]: e.target.value })
 
@@ -80,7 +75,14 @@ const handleSubmit = async e => {
   onSuccess()
   setLoading(false)
 }
+// Chi nhánh = dept không có parent
+const branches = departments.filter(d => !d.parent_id)
 
+// Bộ phận = dept có parent là chi nhánh được chọn
+const depts = departments.filter(d => d.parent_id === selectedBranchId)
+
+// Tổ = dept có parent là bộ phận được chọn
+const teams = departments.filter(d => d.parent_id === selectedDeptId)
   return (
     <form onSubmit={handleSubmit} style={styles.form}>
       <div style={styles.grid}>
@@ -93,20 +95,38 @@ const handleSubmit = async e => {
           <input style={styles.input} name="full_name" value={form.full_name} onChange={handleChange} required />
         </Field>
 
-        <Field label="Chi nhánh">
-          <input style={styles.input} name="branch" value={form.branch} onChange={handleChange} />
-        </Field>
+<Field label="Chi nhánh">
+  <select style={styles.input} value={selectedBranchId}
+    onChange={e => {
+      setSelectedBranchId(e.target.value)
+      setSelectedDeptId('')
+      setForm({ ...form, department_id: '', team: '' })
+    }}>
+    <option value="">-- Chọn chi nhánh --</option>
+    {branches.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+  </select>
+</Field>
 
-        <Field label="Phòng ban">
-          <select style={styles.input} name="department_id" value={form.department_id} onChange={handleChange}>
-            <option value="">-- Chọn phòng ban --</option>
-            {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-          </select>
-        </Field>
+<Field label="Bộ phận">
+  <select style={styles.input} name="department_id" value={selectedDeptId}
+    onChange={e => {
+      setSelectedDeptId(e.target.value)
+      setForm({ ...form, department_id: e.target.value, team: '' })
+    }}
+    disabled={!selectedBranchId}>
+    <option value="">-- Chọn bộ phận --</option>
+    {depts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+  </select>
+</Field>
 
-        <Field label="Tổ">
-          <input style={styles.input} name="team" value={form.team} onChange={handleChange} />
-        </Field>
+<Field label="Tổ">
+  <select style={styles.input} value={form.team}
+    onChange={e => setForm({ ...form, team: e.target.value, department_id: e.target.value || selectedDeptId })}
+    disabled={!selectedDeptId || teams.length === 0}>
+    <option value="">-- Chọn tổ (nếu có) --</option>
+    {teams.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+  </select>
+</Field>
 
         <Field label="Chức vụ">
           <input style={styles.input} name="position" value={form.position} onChange={handleChange} />

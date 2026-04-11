@@ -8,8 +8,7 @@ const EMPLOYMENT_TYPES = [
   { value: 'vo_thoi_han', label: 'Hợp đồng vô thời hạn' },
 ]
 
-export default function EditEmployeeForm({ employee, onSuccess, onClose }) {
-  const [departments, setDepartments] = useState([])
+export default function EditEmployeeForm({ employee, onSuccess, onClose, departments = [] }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [form, setForm] = useState({
@@ -32,12 +31,25 @@ export default function EditEmployeeForm({ employee, onSuccess, onClose }) {
     end_date: employee.end_date || '',
     address: employee.address || '',
   })
+// Xác định branch, dept, team từ data nhân viên hiện tại
+const currentDept = departments.find(d => d.id === employee.department_id)
+const currentParent = currentDept?.parent_id 
+  ? departments.find(d => d.id === currentDept.parent_id) 
+  : null
+const currentGrandParent = currentParent?.parent_id
+  ? departments.find(d => d.id === currentParent.parent_id)
+  : null
 
-  useEffect(() => {
-    supabase.from('departments').select('*').eq('is_active', true).then(({ data }) => {
-      setDepartments(data || [])
-    })
-  }, [])
+// Nếu có 3 cấp: grandParent=chi nhánh, parent=bộ phận, current=tổ
+// Nếu có 2 cấp: parent=chi nhánh, current=bộ phận
+// Nếu có 1 cấp: current=chi nhánh
+const initBranchId = currentGrandParent?.id || currentParent?.id || ''
+const initDeptId = currentGrandParent ? currentParent?.id || '' : currentDept?.parent_id ? currentDept.id : ''
+const initTeamId = currentGrandParent ? currentDept?.id || '' : ''
+
+const [selectedBranchId, setSelectedBranchId] = useState(initBranchId)
+const [selectedDeptId, setSelectedDeptId] = useState(initDeptId)
+
 
   const handleChange = e => setForm({ ...form, [e.target.name]: e.target.value })
 
@@ -53,7 +65,9 @@ export default function EditEmployeeForm({ employee, onSuccess, onClose }) {
     else onSuccess()
     setLoading(false)
   }
-
+const branches = departments.filter(d => !d.parent_id)
+const depts = departments.filter(d => d.parent_id === selectedBranchId)
+const teams = departments.filter(d => d.parent_id === selectedDeptId)
   return (
     <form onSubmit={handleSubmit} style={styles.form}>
       <div style={styles.grid}>
@@ -66,20 +80,41 @@ export default function EditEmployeeForm({ employee, onSuccess, onClose }) {
           <input style={styles.input} name="full_name" value={form.full_name} onChange={handleChange} required />
         </Field>
 
-        <Field label="Chi nhánh">
-          <input style={styles.input} name="branch" value={form.branch} onChange={handleChange} />
-        </Field>
+<Field label="Chi nhánh">
+  <select style={styles.input} value={selectedBranchId}
+    onChange={e => {
+      setSelectedBranchId(e.target.value)
+      setSelectedDeptId('')
+      setForm({ ...form, department_id: '', team: '' })
+    }}>
+    <option value="">-- Chọn chi nhánh --</option>
+    {branches.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+  </select>
+</Field>
 
-        <Field label="Phòng ban">
-          <select style={styles.input} name="department_id" value={form.department_id} onChange={handleChange}>
-            <option value="">-- Chọn phòng ban --</option>
-            {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-          </select>
-        </Field>
+<Field label="Bộ phận">
+  <select style={styles.input} value={selectedDeptId}
+    onChange={e => {
+      setSelectedDeptId(e.target.value)
+      setForm({ ...form, department_id: e.target.value, team: '' })
+    }}
+    disabled={!selectedBranchId}>
+    <option value="">-- Chọn bộ phận --</option>
+    {depts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+  </select>
+</Field>
 
-        <Field label="Tổ">
-          <input style={styles.input} name="team" value={form.team} onChange={handleChange} />
-        </Field>
+<Field label="Tổ">
+  <select style={styles.input} value={initTeamId || ''}
+    onChange={e => {
+      const teamId = e.target.value
+      setForm({ ...form, department_id: teamId || selectedDeptId, team: teamId })
+    }}
+    disabled={!selectedDeptId || teams.length === 0}>
+    <option value="">-- Chọn tổ (nếu có) --</option>
+    {teams.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+  </select>
+</Field>
 
         <Field label="Chức vụ">
           <input style={styles.input} name="position" value={form.position} onChange={handleChange} />
