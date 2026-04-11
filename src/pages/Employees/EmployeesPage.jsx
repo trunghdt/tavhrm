@@ -19,20 +19,36 @@ export default function EmployeesPage() {
   const [showImport, setShowImport] = useState(false)
   const [editEmployee, setEditEmployee] = useState(null)
   const [showExport, setShowExport] = useState(false)
+  const [salaries, setSalaries] = useState({})
 
   useEffect(() => {
     fetchEmployees()
   }, [])
 
-  const fetchEmployees = async () => {
-    setLoading(true)
-    const { data } = await supabase
-      .from('employees')
-      .select('*, departments(name)')
-      .order('full_name')
-    setEmployees(data || [])
-    setLoading(false)
-  }
+const fetchEmployees = async () => {
+  setLoading(true)
+  const { data } = await supabase
+    .from('employees')
+    .select('*, departments(name)')
+    .order('full_name')
+  setEmployees(data || [])
+
+  // Fetch lương mới nhất của tất cả nhân viên
+  const { data: salaryData } = await supabase
+    .from('salary_records')
+    .select('employee_id, base_salary, effective_date')
+    .order('effective_date', { ascending: false })
+
+  // Lấy lương mới nhất của từng NV
+  const salaryMap = {}
+  salaryData?.forEach(s => {
+    if (!salaryMap[s.employee_id]) {
+      salaryMap[s.employee_id] = s.base_salary
+    }
+  })
+  setSalaries(salaryMap)
+  setLoading(false)
+}
 
   const filtered = employees.filter(e =>
     e.full_name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -148,6 +164,10 @@ export default function EmployeesPage() {
                  ['Mã số thuế', selected.tax_code],
                  ['Số tài khoản', selected.bank_account],
                  ['Ngân hàng', selected.bank_name],
+                 ['Mức lương hiện tại', salaries[selected.id]
+                   ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(salaries[selected.id])
+                   : '—'
+                  ],
                  ['Loại hợp đồng', 
                    selected.employment_type === 'thu_viec' ? 'Hợp đồng thử việc' :
                    selected.employment_type === 'thoi_vu' ? 'Hợp đồng thời vụ' :

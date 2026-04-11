@@ -19,6 +19,7 @@ export default function AddEmployeeForm({ onSuccess }) {
     bank_name: '', employment_type: 'co_thoi_han', status: 'active',
     start_date: '', end_date: '', address: '',
   })
+  const [currentSalary, setCurrentSalary] = useState('')
 
   useEffect(() => {
     supabase.from('departments').select('*').eq('is_active', true).then(({ data }) => {
@@ -48,6 +49,16 @@ const handleSubmit = async e => {
     setError(error.message)
     setLoading(false)
     return
+  }
+    // Lưu mức lương hiện tại
+  if (currentSalary && Number(currentSalary) > 0) {
+    await supabase.from('salary_records').insert([{
+      employee_id: newEmployee.id,
+      base_salary: Number(currentSalary),
+      salary_type: 'time_based',
+      effective_date: newEmployee.start_date || new Date().toISOString().split('T')[0],
+      change_reason: 'Lương khởi điểm',
+    }])
   }
 
   // Tự động tạo tài khoản
@@ -162,7 +173,17 @@ const handleSubmit = async e => {
             <input style={styles.input} name="address" value={form.address} onChange={handleChange} />
           </Field>
         </div>
-
+<div style={{ gridColumn: '1 / -1' }}>
+  <Field label="Mức lương hiện tại (VNĐ)">
+    <input
+      style={styles.input}
+      type="number"
+      placeholder="VD: 10000000"
+      value={currentSalary}
+      onChange={e => setCurrentSalary(e.target.value)}
+    />
+  </Field>
+</div>
       </div>
 
       {error && <p style={styles.error}>{error}</p>}

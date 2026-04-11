@@ -51,6 +51,7 @@ export default function ImportExcelModal({ onClose, onSuccess }) {
   start_date: r['Ngày vào'] || null,
   end_date: r['Ngày nghỉ'] || null,
   address: String(r['Địa chỉ'] || ''),
+  _salary: Number(r['Mức lương'] || 0), // temp field
 })).filter(e => e.employee_code && e.full_name)
 
 // Import nhân viên
@@ -63,6 +64,26 @@ if (error) {
   setError(error.message)
   setLoading(false)
   return
+}
+// Lưu salary_records cho nhân viên có mức lương
+const salaryRecords = inserted
+  .filter(emp => {
+    const row = rows.find(r => String(r['Mã nhân viên']) === emp.employee_code)
+    return row && Number(row['Mức lương']) > 0
+  })
+  .map(emp => {
+    const row = rows.find(r => String(r['Mã nhân viên']) === emp.employee_code)
+    return {
+      employee_id: emp.id,
+      base_salary: Number(row['Mức lương']),
+      salary_type: 'time_based',
+      effective_date: emp.start_date || new Date().toISOString().split('T')[0],
+      change_reason: 'Lương khởi điểm',
+    }
+  })
+
+if (salaryRecords.length > 0) {
+  await supabase.from('salary_records').insert(salaryRecords)
 }
 
 // Tự động tạo tài khoản cho từng nhân viên
@@ -107,6 +128,7 @@ setLoading(false)
   'Ngày vào': '2024-01-01',
   'Ngày nghỉ': '',
   'Địa chỉ': '123 Đường ABC, Hà Nội',
+  'Mức lương': 10000000,
 }]
     const ws = XLSX.utils.json_to_sheet(template)
     const wb = XLSX.utils.book_new()
@@ -114,7 +136,7 @@ setLoading(false)
     XLSX.writeFile(wb, 'mau_import_nhanvien.xlsx')
   }
 
-  const COLUMNS = ['Mã nhân viên', 'Họ tên', 'Chi nhánh', 'Phòng ban', 'Tổ', 'Chức vụ', 'Số điện thoại', 'Email', 'Giới tính', 'CCCD', 'Mã số thuế', 'Số TK', 'Ngân hàng', 'Loại HĐ', 'Trạng thái', 'Ngày vào', 'Ngày nghỉ', 'Địa chỉ']
+  const COLUMNS = ['Mã nhân viên', 'Họ tên', 'Chi nhánh', 'Phòng ban', 'Tổ', 'Chức vụ', 'Số điện thoại', 'Email', 'Giới tính', 'CCCD', 'Mã số thuế', 'Số TK', 'Ngân hàng', 'Loại HĐ', 'Trạng thái', 'Ngày vào', 'Ngày nghỉ', 'Địa chỉ', 'Mức lương']
 
   return (
     <div style={styles.overlay} onClick={onClose}>
