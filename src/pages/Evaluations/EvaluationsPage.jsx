@@ -4,145 +4,124 @@ import { useAuthStore } from '../../store/authStore'
 
 const STATUS_LABELS = { draft: 'Nháp', open: 'Đang mở', closed: 'Đã đóng', approved: 'Đã duyệt' }
 const STATUS_COLORS = { draft: '#6b7280', open: '#16a34a', closed: '#d97706', approved: '#1a56db' }
+const TEMPLATE_LABELS = { sx: '🏭 Sản xuất', vp: '🏢 Văn phòng', ql: '👔 Quản lý' }
 
 const RANKING = (score) => {
-  if (score >= 90) return '🏆 Xuất sắc'
-  if (score >= 80) return '⭐⭐ Tốt'
-  if (score >= 70) return '⭐ Khá'
-  if (score >= 65) return '✅ Đạt'
-  return '⚠️ Cần cải thiện'
+  if (score >= 90) return { label: '🏆 Xuất sắc', color: '#d97706' }
+  if (score >= 80) return { label: '⭐⭐ Tốt', color: '#1a56db' }
+  if (score >= 70) return { label: '⭐ Khá', color: '#7c3aed' }
+  if (score >= 65) return { label: '✅ Đạt', color: '#16a34a' }
+  return { label: '⚠️ Cần cải thiện', color: '#dc2626' }
 }
-
-const TEMPLATE_LABELS = { sx: '🏭 Sản xuất', vp: '🏢 Văn phòng', ql: '👔 Quản lý' }
 
 export default function EvaluationsPage() {
   const { role } = useAuthStore()
   const [cycles, setCycles] = useState([])
   const [loading, setLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
-  const [selected, setSelected] = useState(null)
   const [templates, setTemplates] = useState([])
   const [departments, setDepartments] = useState([])
+  const [departmentRoles, setDepartmentRoles] = useState([])
   const [employees, setEmployees] = useState([])
 
   // Form tạo kỳ
+  const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ title: '', period: '', deadline: '' })
-  const [deptAssignments, setDeptAssignments] = useState([]) // [{dept_id, template_type}]
+  const [deptAssignments, setDeptAssignments] = useState([])
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
 
-  // Form điền điểm
+  // Điền điểm
   const [showEvaluate, setShowEvaluate] = useState(false)
   const [selectedCycle, setSelectedCycle] = useState(null)
-  const [selectedEmployee, setSelectedEmployee] = useState(null)
   const [cycleEmployees, setCycleEmployees] = useState([])
+  const [selectedEmployee, setSelectedEmployee] = useState(null)
   const [scores, setScores] = useState({})
   const [comment, setComment] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [existingEvals, setExistingEvals] = useState([])
 
+  // Chi tiết kỳ
+  const [selected, setSelected] = useState(null)
+
   useEffect(() => {
-    fetchCycles()
-    fetchTemplates()
-    fetchDepartments()
+    fetchAll()
   }, [])
 
-  const fetchCycles = async () => {
+  const fetchAll = async () => {
     setLoading(true)
-    const { data } = await supabase
-      .from('evaluation_cycles')
-      .select('*')
-      .order('created_at', { ascending: false })
-    setCycles(data || [])
+    const [
+      { data: cyclesData },
+      { data: tmplData },
+      { data: deptsData },
+      { data: rolesData },
+      { data: empsData },
+    ] = await Promise.all([
+      supabase.from('evaluation_cycles').select('*').order('created_at', { ascending: false }),
+      supabase.from('criteria_templates').select('*').eq('is_active', true),
+      supabase.from('departments').select('*').eq('is_active', true),
+      supabase.from('department_roles').select('*, employees(full_name, employee_code)').eq('is_active', true),
+      supabase.from('employees').select('*, departments(name)').eq('status', 'active'),
+    ])
+    setCycles(cyclesData || [])
+    setTemplates(tmplData || [])
+    setDepartments(deptsData || [])
+    setDepartmentRoles(rolesData || [])
+    setEmployees(empsData || [])
     setLoading(false)
   }
 
-  const fetchTemplates = async () => {
-    const { data } = await supabase
-      .from('criteria_templates')
-      .select('*')
-      .eq('is_active', true)
-    setTemplates(data || [])
+  // Tìm leader của dept hoặc dept cha
+  const findLeader = (deptId) => {
+    const leader = departmentRoles.find(r => r.department_id === deptId && r.role_type === 'leader')
+    if (leader) return leader
+    // Tìm ở dept cha
+    const dept = departments.find(d => d.id === deptId)
+    if (dept?.parent_id) return findLeader(dept.parent_id)
+    return null
   }
 
-  const fetchDepartments = async () => {
-    const { data } = await supabase
-      .from('departments')
-      .select('*')
-      .eq('is_active', true)
-    setDepartments(data || [])
+  // Toggle chọn dept
+const toggleDept = (deptId) => {
+  // Lấy tất cả ID con cháu của dept này
+  const getDescendantIds = (id) => {
+    const children = departments.filter(d => d.parent_id === id)
+    return [...children.map(c => c.id), ...children.flatMap(c => getDescendantIds(c.id))]
   }
 
-  const fetchCycleEmployees = async (cycle) => {
-    const scope = cycle.scope || {}
-    const deptAssign = scope.dept_assignments || []
+  const descendantIds = getDescendantIds(deptId)
+  const allIds = [deptId, ...descendantIds]
 
-    // Lấy tất cả nhân viên thuộc các phòng ban trong kỳ
-    const deptIds = deptAssign.map(d => d.dept_id)
-    const { data: emps } = await supabase
-      .from('employees')
-      .select('*, departments(name)')
-      .in('department_id', deptIds)
-      .eq('status', 'active')
+  setDeptAssignments(prev => {
+    const isChecked = prev.some(d => d.dept_id === deptId)
 
-    // Lấy các đánh giá đã có
-    const { data: evals } = await supabase
-      .from('evaluations')
-      .select('*')
-      .eq('cycle_id', cycle.id)
+    if (isChecked) {
+      // Bỏ tick node này và tất cả con cháu
+      return prev.filter(d => !allIds.includes(d.dept_id))
+    } else {
+      // Tick node này và tất cả con cháu (giữ lại các node đã tick trước)
+      const newIds = allIds.filter(id => !prev.some(d => d.dept_id === id))
+      const newAssignments = newIds.map(id => ({
+        dept_id: id,
+        template_type: 'sx' // default
+      }))
+      return [...prev, ...newAssignments]
+    }
+  })
+}
 
-    setExistingEvals(evals || [])
-
-    // Phân nhóm: NV thường theo BP, Trưởng BP → nhóm QL (do Board Manager đánh giá)
-    const userPerms = await supabase
-      .from('user_permissions')
-      .select('user_id, role')
-      .in('role', ['manager'])
-      .eq('is_active', true)
-
-    const managerUserIds = (userPerms.data || []).map(p => p.user_id)
-
-    // Gán template cho từng NV
-    const result = (emps || []).map(emp => {
-      const isManager = managerUserIds.includes(emp.user_id)
-      const deptInfo = deptAssign.find(d => d.dept_id === emp.department_id)
-      return {
-        ...emp,
-        template_type: isManager ? 'ql' : (deptInfo?.template_type || 'vp'),
-        is_manager: isManager,
-        evaluated_by: isManager ? 'board_manager' : 'manager',
-      }
-    })
-
-    setCycleEmployees(result)
-    setEmployees(emps || [])
-  }
-
-  // Thêm/xóa phòng ban vào kỳ đánh giá
-  const toggleDept = (deptId) => {
-    setDeptAssignments(prev => {
-      const exists = prev.find(d => d.dept_id === deptId)
-      if (exists) return prev.filter(d => d.dept_id !== deptId)
-      return [...prev, { dept_id: deptId, template_type: 'vp' }]
-    })
-  }
-
-  const setDeptTemplate = (deptId, templateType) => {
+  const setDeptTemplate = (deptId, type) => {
     setDeptAssignments(prev =>
-      prev.map(d => d.dept_id === deptId ? { ...d, template_type: templateType } : d)
+      prev.map(d => d.dept_id === deptId ? { ...d, template_type: type } : d)
     )
   }
 
   const handleCreate = async (e) => {
     e.preventDefault()
-    if (deptAssignments.length === 0) {
-      setError('Vui lòng chọn ít nhất 1 phòng ban!')
-      return
-    }
+    if (deptAssignments.length === 0) { setError('Chọn ít nhất 1 bộ phận!'); return }
     setCreating(true)
     setError('')
 
-    const { data: cycle, error: cycleError } = await supabase
+    const { data: cycle, error: err } = await supabase
       .from('evaluation_cycles')
       .insert([{
         title: form.title,
@@ -152,39 +131,67 @@ export default function EvaluationsPage() {
         scope: { dept_assignments: deptAssignments },
         created_by: (await supabase.auth.getUser()).data.user?.id,
       }])
-      .select()
-      .single()
+      .select().single()
 
-    if (cycleError) {
-      setError(cycleError.message)
-      setCreating(false)
-      return
-    }
+    if (err) { setError(err.message); setCreating(false); return }
 
     setShowForm(false)
     setForm({ title: '', period: '', deadline: '' })
     setDeptAssignments([])
-    fetchCycles()
+    fetchAll()
     setCreating(false)
   }
 
   const handleOpenEvaluate = async (cycle) => {
     setSelectedCycle(cycle)
-    await fetchCycleEmployees(cycle)
+    const scope = cycle.scope || {}
+    const deptAssign = scope.dept_assignments || []
+    const deptIds = deptAssign.map(d => d.dept_id)
+
+    // Lấy NV trong các dept
+    const { data: emps } = await supabase
+      .from('employees')
+      .select('*, departments(name)')
+      .in('department_id', deptIds)
+      .eq('status', 'active')
+
+    // Lấy đánh giá đã có
+    const { data: evals } = await supabase
+      .from('evaluations')
+      .select('*')
+      .eq('cycle_id', cycle.id)
+
+    setExistingEvals(evals || [])
+
+    // Xác định template và evaluator cho từng NV
+    const result = (emps || []).map(emp => {
+      const isLeader = departmentRoles.some(r => r.employee_id === emp.id && r.role_type === 'leader')
+      const deptInfo = deptAssign.find(d => d.dept_id === emp.department_id)
+      const leader = findLeader(emp.department_id)
+      return {
+        ...emp,
+        template_type: isLeader ? 'ql' : (deptInfo?.template_type || 'vp'),
+        is_leader: isLeader,
+        evaluator: isLeader ? 'board_manager' : (leader?.employees?.full_name || 'Chưa có leader'),
+        leader_id: isLeader ? null : leader?.employee_id,
+      }
+    })
+
+    // Sắp xếp: Leader → Sub-leader → NV thường
+    result.sort((a, b) => {
+      if (a.is_leader && !b.is_leader) return -1
+      if (!a.is_leader && b.is_leader) return 1
+      return 0
+    })
+
+    setCycleEmployees(result)
     setShowEvaluate(true)
   }
 
   const handleSelectEmployee = (emp) => {
-    // Kiểm tra quyền: manager chỉ đánh giá NV thường, board_manager đánh giá manager
-    if (role === 'manager' && emp.is_manager) return
-    if (role === 'board_manager' && !emp.is_manager) {
-      // Board manager có thể đánh giá tất cả
-    }
     setSelectedEmployee(emp)
     setScores({})
     setComment('')
-
-    // Load điểm đã có nếu có
     const existing = existingEvals.find(e => e.employee_id === emp.id)
     if (existing) {
       setScores(existing.scores || {})
@@ -192,65 +199,74 @@ export default function EvaluationsPage() {
     }
   }
 
+  const getTemplate = (emp) => templates.find(t => t.template_type === emp?.template_type)
+
+  const calcTotalScore = (emp) => {
+    const template = getTemplate(emp)
+    if (!template?.criteria_data) return 0
+    let total = 0
+    template.criteria_data.forEach(group => {
+      const groupScores = group.items.map(item => Number(scores[item.name] || 0))
+      const groupSum = groupScores.reduce((a, b) => a + b, 0)
+      const groupMax = group.items.reduce((a, b) => a + b.max_score, 0)
+      total += (groupSum / groupMax) * group.weight
+    })
+    return Math.round(total * 10) / 10
+  }
+
   const handleSubmitEval = async () => {
     if (!selectedEmployee || !selectedCycle) return
     setSubmitting(true)
-
-    // Tính tổng điểm
-    const template = templates.find(t => t.template_type === selectedEmployee.template_type)
-    const criteria = template?.criteria_data || []
-    let totalScore = 0
-
-    criteria.forEach(group => {
-      const groupScores = group.items.map(item => Number(scores[item.name] || 0))
-      const groupTotal = groupScores.reduce((a, b) => a + b, 0)
-      const groupMax = group.items.reduce((a, b) => a + b.max_score, 0)
-      totalScore += (groupTotal / groupMax) * group.weight
-    })
-
+    const totalScore = calcTotalScore(selectedEmployee)
     const ranking = RANKING(totalScore)
     const userId = (await supabase.auth.getUser()).data.user?.id
-
-    // Kiểm tra đã có đánh giá chưa
     const existing = existingEvals.find(e => e.employee_id === selectedEmployee.id)
 
     if (existing) {
       await supabase.from('evaluations').update({
-        scores, total_score: totalScore, ranking, comment,
-        status: 'submitted', submitted_at: new Date().toISOString(),
+        scores, total_score: totalScore, ranking: ranking.label,
+        comment, status: 'submitted', submitted_at: new Date().toISOString(),
       }).eq('id', existing.id)
     } else {
       await supabase.from('evaluations').insert([{
         cycle_id: selectedCycle.id,
         employee_id: selectedEmployee.id,
         evaluator_id: userId,
-        scores, total_score: totalScore, ranking, comment,
-        status: 'submitted', submitted_at: new Date().toISOString(),
+        scores, total_score: totalScore, ranking: ranking.label,
+        comment, status: 'submitted', submitted_at: new Date().toISOString(),
       }])
     }
 
-    // Reload
-    await fetchCycleEmployees(selectedCycle)
+    // Reload evals
+    const { data: evals } = await supabase.from('evaluations').select('*').eq('cycle_id', selectedCycle.id)
+    setExistingEvals(evals || [])
     setSelectedEmployee(null)
     setSubmitting(false)
   }
 
-  const canCreate = role === 'board_manager' || role === 'hr'
-
-  // Lọc NV theo quyền
+  // Lọc NV theo role
   const visibleEmployees = cycleEmployees.filter(emp => {
     if (role === 'board_manager') return true
-    if (role === 'manager') return !emp.is_manager // Chỉ thấy NV thường
+    if (role === 'hr') return true
+    if (role === 'manager') return !emp.is_leader
     return false
   })
 
-  const getTemplate = (emp) => {
-    return templates.find(t => t.template_type === emp?.template_type)
+  const canCreate = role === 'board_manager' || role === 'hr'
+
+  // Build dept tree cho form
+  const buildDeptOptions = (depts, parentId = null, level = 0) => {
+    return depts
+      .filter(d => d.parent_id === parentId)
+      .flatMap(d => [
+        { ...d, level },
+        ...buildDeptOptions(depts, d.id, level + 1)
+      ])
   }
+  const flatDepts = buildDeptOptions(departments)
 
   return (
     <div>
-      {/* Header */}
       <div style={styles.headerRow}>
         {canCreate && (
           <button style={styles.addBtn} onClick={() => { setShowForm(true); setError('') }}>
@@ -282,25 +298,49 @@ export default function EvaluationsPage() {
               </div>
             </div>
 
-            {/* Chọn phòng ban + loại đánh giá */}
+            {/* Chọn bộ phận */}
             <div style={styles.deptSection}>
-              <p style={styles.deptTitle}>📋 Chọn phòng ban & loại đánh giá</p>
-              <p style={styles.deptSub}>
-                ⚠️ Trưởng bộ phận sẽ tự động được xếp vào nhóm <strong>Quản lý</strong> và do <strong>Board Manager</strong> đánh giá.
-              </p>
+              <p style={styles.deptTitle}>📋 Chọn bộ phận & loại đánh giá</p>
+              <p style={styles.deptSub}>⚠️ Leader sẽ tự động được đánh giá theo loại <strong>Quản lý</strong> bởi Board Manager</p>
               <div style={styles.deptList}>
-                {departments.map(dept => {
+                {flatDepts.map(dept => {
                   const assigned = deptAssignments.find(d => d.dept_id === dept.id)
+                  const leader = findLeader(dept.id)
                   return (
-                    <div key={dept.id} style={{ ...styles.deptItem, ...(assigned ? styles.deptItemActive : {}) }}>
+                    <div key={dept.id} style={{ ...styles.deptItem, ...(assigned ? styles.deptItemActive : {}), paddingLeft: 12 + dept.level * 16 }}>
                       <div style={styles.deptItemLeft}>
-                        <input type="checkbox" checked={!!assigned}
-                          onChange={() => toggleDept(dept.id)} id={`dept-${dept.id}`} />
-                        <label htmlFor={`dept-${dept.id}`} style={styles.deptName}>{dept.name}</label>
+                        <input
+  type="checkbox"
+  checked={!!assigned}
+  ref={el => {
+    if (el) {
+      // Trạng thái partial: có một số con được tick
+      const descendantIds = (() => {
+        const getIds = (id) => {
+          const children = departments.filter(d => d.parent_id === id)
+          return [...children.map(c => c.id), ...children.flatMap(c => getIds(c.id))]
+        }
+        return getIds(dept.id)
+      })()
+      const hasDescendants = descendantIds.length > 0
+      const someChecked = hasDescendants && descendantIds.some(id => deptAssignments.some(d => d.dept_id === id))
+      const allChecked = hasDescendants && descendantIds.every(id => deptAssignments.some(d => d.dept_id === id))
+      el.indeterminate = someChecked && !allChecked && !assigned
+    }
+  }}
+  onChange={() => toggleDept(dept.id)}
+/>
+                        <span style={{ fontSize: dept.level === 0 ? 14 : dept.level === 1 ? 13 : 12, fontWeight: dept.level === 0 ? 700 : dept.level === 1 ? 600 : 400, color: '#111827' }}>
+                          {dept.level > 0 ? '└ ' : ''}{dept.name}
+                        </span>
+                        {leader && (
+                          <span style={styles.leaderTag}>
+                            👑 {leader.employees?.full_name}
+                          </span>
+                        )}
                       </div>
                       {assigned && (
-                        <select style={styles.templateSelect}
-                          value={assigned.template_type}
+                        <select style={styles.templateSelect} value={assigned.template_type}
                           onChange={e => setDeptTemplate(dept.id, e.target.value)}>
                           <option value="sx">🏭 Sản xuất</option>
                           <option value="vp">🏢 Văn phòng</option>
@@ -311,6 +351,27 @@ export default function EvaluationsPage() {
                 })}
               </div>
             </div>
+
+            {/* Preview số NV */}
+            {deptAssignments.length > 0 && (
+              <div style={styles.previewBox}>
+                <p style={styles.previewTitle}>👥 Tổng quan kỳ đánh giá:</p>
+                {deptAssignments.map(d => {
+                  const dept = departments.find(dep => dep.id === d.dept_id)
+                  const empCount = employees.filter(e => e.department_id === d.dept_id).length
+                  const leader = findLeader(d.dept_id)
+                  return (
+                    <div key={d.dept_id} style={styles.previewItem}>
+                      <span style={styles.previewDept}>{dept?.name}</span>
+                      <span style={styles.previewMeta}>{empCount} NV · {TEMPLATE_LABELS[d.template_type]}</span>
+                      <span style={styles.previewLeader}>
+                        {leader ? `👑 ${leader.employees?.full_name}` : '⚠️ Chưa có leader'}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
 
             {error && <p style={styles.error}>{error}</p>}
             <div style={styles.formActions}>
@@ -352,8 +413,8 @@ export default function EvaluationsPage() {
                   <span style={styles.infoValue}>{cycle.deadline ? new Date(cycle.deadline).toLocaleDateString('vi-VN') : '—'}</span>
                 </div>
                 <div style={styles.infoRow}>
-                  <span style={styles.infoLabel}>Phòng ban</span>
-                  <span style={styles.infoValue}>{(cycle.scope?.dept_assignments?.length || 0)} BP</span>
+                  <span style={styles.infoLabel}>Bộ phận</span>
+                  <span style={styles.infoValue}>{cycle.scope?.dept_assignments?.length || 0} bộ phận</span>
                 </div>
               </div>
               <div style={styles.cardFooter}>
@@ -362,24 +423,22 @@ export default function EvaluationsPage() {
                     📝 Điền đánh giá
                   </button>
                 )}
-                <button style={styles.viewBtn} onClick={() => setSelected(cycle)}>
-                  Chi tiết →
-                </button>
+                <button style={styles.viewBtn} onClick={() => setSelected(cycle)}>Chi tiết →</button>
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* Modal điền đánh giá */}
+      {/* Modal điền điểm */}
       {showEvaluate && selectedCycle && (
         <div style={styles.overlay} onClick={() => { setShowEvaluate(false); setSelectedEmployee(null) }}>
-          <div style={{ ...styles.modal, width: selectedEmployee ? 700 : 500 }} onClick={e => e.stopPropagation()}>
+          <div style={{ ...styles.modal, width: selectedEmployee ? 760 : 480 }} onClick={e => e.stopPropagation()}>
             <div style={styles.modalHeader}>
               <div>
                 <h2 style={styles.modalTitle}>📝 {selectedCycle.title}</h2>
                 <p style={{ fontSize: 13, color: '#6b7280', marginTop: 4 }}>
-                  {selectedEmployee ? `Đang đánh giá: ${selectedEmployee.full_name}` : 'Chọn nhân viên để đánh giá'}
+                  {selectedEmployee ? `Đang đánh giá: ${selectedEmployee.full_name}` : 'Chọn nhân viên để bắt đầu'}
                 </p>
               </div>
               <button style={styles.closeBtn} onClick={() => { setShowEvaluate(false); setSelectedEmployee(null) }}>✕</button>
@@ -388,59 +447,74 @@ export default function EvaluationsPage() {
             <div style={{ display: 'flex', maxHeight: '70vh', overflow: 'hidden' }}>
               {/* Danh sách NV */}
               <div style={styles.empList}>
-                {/* Nhóm NV thường */}
+                {/* Leader */}
+                {visibleEmployees.filter(e => e.is_leader).length > 0 && role === 'board_manager' && (
+                  <>
+                    <p style={styles.groupLabel}>👔 Trưởng bộ phận</p>
+                    {visibleEmployees.filter(e => e.is_leader).map(emp => {
+                      const evalDone = existingEvals.find(ev => ev.employee_id === emp.id)
+                      return (
+                        <div key={emp.id}
+                          style={{ ...styles.empItem, ...(selectedEmployee?.id === emp.id ? styles.empItemActive : {}) }}
+                          onClick={() => handleSelectEmployee(emp)}>
+                          <div style={{ ...styles.empAvatar, background: '#7c3aed' }}>{emp.full_name?.[0]}</div>
+                          <div>
+                            <div style={styles.empName}>{emp.full_name}</div>
+                            <div style={styles.empMeta}>👔 QL {evalDone ? '✅' : ''}</div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                    <div style={{ borderTop: '1px solid #f3f4f6', margin: '8px 0' }} />
+                  </>
+                )}
+
+                {/* NV thường */}
                 <p style={styles.groupLabel}>👥 Nhân viên</p>
-                {visibleEmployees.filter(e => !e.is_manager).map(emp => {
+                {visibleEmployees.filter(e => !e.is_leader).map(emp => {
                   const evalDone = existingEvals.find(ev => ev.employee_id === emp.id)
                   return (
                     <div key={emp.id}
-                      style={{ ...styles.empItem, ...(selectedEmployee?.id === emp.id ? styles.empItemActive : {}), ...(evalDone ? styles.empItemDone : {}) }}
+                      style={{ ...styles.empItem, ...(selectedEmployee?.id === emp.id ? styles.empItemActive : {}) }}
                       onClick={() => handleSelectEmployee(emp)}>
                       <div style={styles.empAvatar}>{emp.full_name?.[0]}</div>
                       <div>
                         <div style={styles.empName}>{emp.full_name}</div>
-                        <div style={styles.empMeta}>{TEMPLATE_LABELS[emp.template_type]} {evalDone ? '✅' : ''}</div>
+                        <div style={styles.empMeta}>
+                          {TEMPLATE_LABELS[emp.template_type]} {evalDone ? '✅' : ''}
+                        </div>
                       </div>
                     </div>
                   )
                 })}
 
-                {/* Nhóm Quản lý — chỉ Board Manager thấy */}
-                {role === 'board_manager' && cycleEmployees.filter(e => e.is_manager).length > 0 && (
-                  <>
-                    <p style={{ ...styles.groupLabel, marginTop: 12 }}>👔 Trưởng bộ phận</p>
-                    {cycleEmployees.filter(e => e.is_manager).map(emp => {
-                      const evalDone = existingEvals.find(ev => ev.employee_id === emp.id)
-                      return (
-                        <div key={emp.id}
-                          style={{ ...styles.empItem, ...(selectedEmployee?.id === emp.id ? styles.empItemActive : {}), ...(evalDone ? styles.empItemDone : {}) }}
-                          onClick={() => handleSelectEmployee(emp)}>
-                          <div style={{ ...styles.empAvatar, background: '#7c3aed' }}>{emp.full_name?.[0]}</div>
-                          <div>
-                            <div style={styles.empName}>{emp.full_name}</div>
-                            <div style={styles.empMeta}>👔 Quản lý {evalDone ? '✅' : ''}</div>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </>
+                {visibleEmployees.length === 0 && (
+                  <p style={{ fontSize: 12, color: '#9ca3af', padding: 8 }}>Không có nhân viên</p>
                 )}
               </div>
 
               {/* Form điền điểm */}
               {selectedEmployee && (
                 <div style={styles.scoreForm}>
+                  {/* Header NV */}
                   <div style={styles.scoreHeader}>
-                    <strong>{selectedEmployee.full_name}</strong>
-                    <span style={styles.templateBadge}>{TEMPLATE_LABELS[selectedEmployee.template_type]}</span>
+                    <div>
+                      <strong style={{ fontSize: 14 }}>{selectedEmployee.full_name}</strong>
+                      <span style={{ ...styles.templateBadge, marginLeft: 8 }}>
+                        {TEMPLATE_LABELS[selectedEmployee.template_type]}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 12, color: '#6b7280' }}>
+                      Người đánh giá: {selectedEmployee.is_leader ? 'Board Manager' : selectedEmployee.evaluator}
+                    </div>
                   </div>
 
-                  <div style={{ overflowY: 'auto', maxHeight: 'calc(70vh - 160px)', paddingRight: 8 }}>
+                  <div style={{ overflowY: 'auto', flex: 1, paddingRight: 8 }}>
                     {(getTemplate(selectedEmployee)?.criteria_data || []).map((group, gi) => (
                       <div key={gi} style={styles.criteriaGroup}>
                         <div style={styles.groupHeader}>
                           <span style={styles.groupName}>{group.group}</span>
-                          <span style={styles.groupWeight}>Trọng số: {group.weight}%</span>
+                          <span style={styles.groupWeight}>Trọng số: {group.weight}% · Tổng: {group.total_score} điểm</span>
                         </div>
                         {group.items.map((item, ii) => (
                           <div key={ii} style={styles.criteriaRow}>
@@ -450,30 +524,54 @@ export default function EvaluationsPage() {
                             </div>
                             <div style={styles.scoreInput}>
                               <input
-                                type="number"
-                                min="0"
-                                max={item.max_score}
-                                style={styles.scoreField}
+                                type="number" min="0" max={item.max_score}
+                                style={{
+                                  ...styles.scoreField,
+                                  borderColor: scores[item.name] > item.max_score ? '#dc2626' : '#d1d5db',
+                                }}
                                 placeholder="0"
                                 value={scores[item.name] || ''}
-                                onChange={e => setScores({ ...scores, [item.name]: e.target.value })}
+                                onChange={e => setScores({ ...scores, [item.name]: Math.min(Number(e.target.value), item.max_score) })}
                               />
                               <span style={styles.scoreMax}>/{item.max_score}</span>
                             </div>
                           </div>
                         ))}
+                        {/* Tổng nhóm */}
+                        <div style={styles.groupTotal}>
+                          <span style={{ fontSize: 12, color: '#6b7280' }}>Tổng nhóm:</span>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>
+                            {group.items.reduce((sum, item) => sum + (Number(scores[item.name]) || 0), 0)} / {group.total_score}
+                          </span>
+                        </div>
                       </div>
                     ))}
 
+                    {/* Tổng điểm */}
+                    {Object.keys(scores).length > 0 && (
+                      <div style={styles.totalBox}>
+                        <div style={styles.totalScore}>
+                          <span style={{ fontSize: 14, color: '#374151' }}>Tổng điểm quy đổi:</span>
+                          <span style={{ fontSize: 28, fontWeight: 700, color: '#1a56db' }}>
+                            {calcTotalScore(selectedEmployee)}
+                          </span>
+                          <span style={{ fontSize: 13, color: '#6b7280' }}>/100</span>
+                        </div>
+                        <div style={{
+                          ...styles.rankBadge,
+                          background: RANKING(calcTotalScore(selectedEmployee)).color + '15',
+                          color: RANKING(calcTotalScore(selectedEmployee)).color,
+                        }}>
+                          {RANKING(calcTotalScore(selectedEmployee)).label}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Nhận xét */}
                     <div style={styles.commentBox}>
                       <label style={styles.label}>Nhận xét tổng quan</label>
-                      <textarea
-                        style={styles.textarea}
-                        placeholder="Nhận xét về nhân viên..."
-                        value={comment}
-                        onChange={e => setComment(e.target.value)}
-                        rows={3}
-                      />
+                      <textarea style={styles.textarea} placeholder="Nhận xét về nhân viên..."
+                        value={comment} onChange={e => setComment(e.target.value)} rows={3} />
                     </div>
                   </div>
 
@@ -508,7 +606,7 @@ export default function EvaluationsPage() {
                 {[
                   ['Kỳ đánh giá', selected.period],
                   ['Deadline', selected.deadline ? new Date(selected.deadline).toLocaleDateString('vi-VN') : '—'],
-                  ['Số phòng ban', `${selected.scope?.dept_assignments?.length || 0} phòng ban`],
+                  ['Số bộ phận', `${selected.scope?.dept_assignments?.length || 0} bộ phận`],
                   ['Ngày tạo', new Date(selected.created_at).toLocaleDateString('vi-VN')],
                 ].map(([label, value]) => (
                   <div key={label} style={styles.infoItem}>
@@ -518,17 +616,20 @@ export default function EvaluationsPage() {
                 ))}
               </div>
 
-              {/* Phòng ban trong kỳ */}
+              {/* Bộ phận trong kỳ */}
               {selected.scope?.dept_assignments?.length > 0 && (
-                <div style={styles.deptSection}>
-                  <p style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8 }}>Phòng ban tham gia:</p>
+                <div style={{ marginBottom: 20 }}>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8 }}>Bộ phận tham gia:</p>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                     {selected.scope.dept_assignments.map(d => {
                       const dept = departments.find(dep => dep.id === d.dept_id)
+                      const leader = findLeader(d.dept_id)
                       return (
-                        <span key={d.dept_id} style={{ ...styles.badge, background: '#eff6ff', color: '#1a56db' }}>
-                          {dept?.name || d.dept_id} · {TEMPLATE_LABELS[d.template_type]}
-                        </span>
+                        <div key={d.dept_id} style={styles.deptChip}>
+                          <span>{dept?.name || '—'}</span>
+                          <span style={{ color: '#6b7280' }}>· {TEMPLATE_LABELS[d.template_type]}</span>
+                          {leader && <span style={{ color: '#1a56db' }}>· 👑 {leader.employees?.full_name}</span>}
+                        </div>
                       )
                     })}
                   </div>
@@ -545,7 +646,7 @@ export default function EvaluationsPage() {
                       {role === 'board_manager' && (
                         <button style={styles.warningBtn} onClick={async () => {
                           await supabase.from('evaluation_cycles').update({ status: 'closed' }).eq('id', selected.id)
-                          fetchCycles(); setSelected(null)
+                          fetchAll(); setSelected(null)
                         }}>Đóng kỳ</button>
                       )}
                     </>
@@ -553,7 +654,7 @@ export default function EvaluationsPage() {
                   {selected.status === 'closed' && role === 'board_manager' && (
                     <button style={styles.primaryBtn} onClick={async () => {
                       await supabase.from('evaluation_cycles').update({ status: 'approved' }).eq('id', selected.id)
-                      fetchCycles(); setSelected(null)
+                      fetchAll(); setSelected(null)
                     }}>✅ Phê duyệt</button>
                   )}
                 </div>
@@ -578,12 +679,18 @@ const styles = {
   deptSection: { background: '#f8fafc', borderRadius: 8, padding: 16, marginBottom: 16 },
   deptTitle: { fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 },
   deptSub: { fontSize: 12, color: '#6b7280', marginBottom: 12 },
-  deptList: { display: 'flex', flexDirection: 'column', gap: 8 },
-  deptItem: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff' },
+  deptList: { display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 300, overflowY: 'auto' },
+  deptItem: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderRadius: 7, border: '1px solid #e5e7eb', background: '#fff' },
   deptItemActive: { border: '1px solid #bfdbfe', background: '#eff6ff' },
-  deptItemLeft: { display: 'flex', alignItems: 'center', gap: 10 },
-  deptName: { fontSize: 14, fontWeight: 500, color: '#111827', cursor: 'pointer' },
-  templateSelect: { padding: '6px 10px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 13, outline: 'none', background: '#fff' },
+  deptItemLeft: { display: 'flex', alignItems: 'center', gap: 8 },
+  leaderTag: { fontSize: 11, color: '#d97706', background: '#fffbeb', padding: '1px 6px', borderRadius: 10 },
+  templateSelect: { padding: '5px 8px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 12, outline: 'none' },
+  previewBox: { background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: 14, marginBottom: 16 },
+  previewTitle: { fontSize: 13, fontWeight: 600, color: '#16a34a', marginBottom: 8 },
+  previewItem: { display: 'flex', gap: 12, alignItems: 'center', fontSize: 13, marginBottom: 4 },
+  previewDept: { fontWeight: 600, color: '#111827', minWidth: 120 },
+  previewMeta: { color: '#6b7280' },
+  previewLeader: { color: '#d97706', fontSize: 12 },
   error: { color: '#dc2626', fontSize: 13, marginBottom: 12 },
   formActions: { display: 'flex', justifyContent: 'flex-end', gap: 12 },
   cancelBtn: { padding: '9px 20px', background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: 8, fontSize: 14, cursor: 'pointer' },
@@ -607,37 +714,41 @@ const styles = {
   overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 },
   modal: { background: '#fff', borderRadius: 12, width: 560, maxHeight: '85vh', overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column' },
   modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '20px 24px', borderBottom: '1px solid #f3f4f6', flexShrink: 0 },
-  modalTitle: { fontSize: 18, fontWeight: 700, color: '#111827' },
+  modalTitle: { fontSize: 18, fontWeight: 700, color: '#111827', marginBottom: 4 },
   closeBtn: { background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#6b7280' },
   modalBody: { padding: 24, overflowY: 'auto' },
   infoGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 },
   infoItem: { display: 'flex', flexDirection: 'column', gap: 4 },
-  actionRow: { display: 'flex', gap: 12, marginTop: 20 },
+  deptChip: { display: 'flex', gap: 6, fontSize: 12, padding: '4px 10px', background: '#f8fafc', borderRadius: 6, border: '1px solid #e5e7eb' },
+  actionRow: { display: 'flex', gap: 12 },
   primaryBtn: { padding: '10px 20px', background: '#1a56db', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' },
   warningBtn: { padding: '10px 20px', background: '#fef3c7', color: '#d97706', border: '1px solid #fcd34d', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' },
-  empList: { width: 200, borderRight: '1px solid #f3f4f6', padding: '16px 12px', overflowY: 'auto', flexShrink: 0 },
-  groupLabel: { fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', marginBottom: 8, paddingLeft: 4 },
-  empItem: { display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8, cursor: 'pointer', marginBottom: 4 },
+  empList: { width: 200, borderRight: '1px solid #f3f4f6', padding: '12px 8px', overflowY: 'auto', flexShrink: 0 },
+  groupLabel: { fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', marginBottom: 6, paddingLeft: 4 },
+  empItem: { display: 'flex', alignItems: 'center', gap: 8, padding: '7px 8px', borderRadius: 7, cursor: 'pointer', marginBottom: 3 },
   empItemActive: { background: '#eff6ff' },
-  empItemDone: { opacity: 0.7 },
-  empAvatar: { width: 30, height: 30, borderRadius: '50%', background: '#1a56db', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 12, flexShrink: 0 },
-  empName: { fontSize: 13, fontWeight: 600, color: '#111827' },
-  empMeta: { fontSize: 11, color: '#6b7280' },
-  scoreForm: { flex: 1, padding: 16, overflowY: 'auto', display: 'flex', flexDirection: 'column' },
-  scoreHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid #f3f4f6' },
-  templateBadge: { fontSize: 12, background: '#eff6ff', color: '#1a56db', padding: '2px 8px', borderRadius: 12 },
-  criteriaGroup: { marginBottom: 16 },
-  groupHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '8px 12px', borderRadius: 6, marginBottom: 8 },
-  groupName: { fontSize: 13, fontWeight: 600, color: '#111827' },
-  groupWeight: { fontSize: 12, color: '#6b7280' },
-  criteriaRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '6px 4px', borderBottom: '1px solid #f9fafb' },
-  criteriaInfo: { flex: 1, marginRight: 12 },
-  criteriaName: { fontSize: 13, fontWeight: 500, color: '#374151', display: 'block' },
-  criteriaDesc: { fontSize: 11, color: '#9ca3af', display: 'block', marginTop: 2 },
-  scoreInput: { display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 },
-  scoreField: { width: 56, padding: '4px 8px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 13, textAlign: 'center', outline: 'none' },
-  scoreMax: { fontSize: 12, color: '#6b7280', whiteSpace: 'nowrap' },
-  commentBox: { marginTop: 16, display: 'flex', flexDirection: 'column', gap: 6 },
-  textarea: { padding: '8px 12px', borderRadius: 7, border: '1px solid #d1d5db', fontSize: 13, outline: 'none', resize: 'vertical' },
-  scoreActions: { display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 16, paddingTop: 12, borderTop: '1px solid #f3f4f6', flexShrink: 0 },
+  empAvatar: { width: 28, height: 28, borderRadius: '50%', background: '#1a56db', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 11, flexShrink: 0 },
+  empName: { fontSize: 12, fontWeight: 600, color: '#111827' },
+  empMeta: { fontSize: 10, color: '#6b7280' },
+  scoreForm: { flex: 1, padding: 16, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 0 },
+  scoreHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, paddingBottom: 10, borderBottom: '1px solid #f3f4f6', flexShrink: 0 },
+  templateBadge: { fontSize: 11, background: '#eff6ff', color: '#1a56db', padding: '2px 7px', borderRadius: 10 },
+  criteriaGroup: { marginBottom: 14 },
+  groupHeader: { display: 'flex', justifyContent: 'space-between', background: '#f8fafc', padding: '7px 10px', borderRadius: 6, marginBottom: 6 },
+  groupName: { fontSize: 12, fontWeight: 700, color: '#111827' },
+  groupWeight: { fontSize: 11, color: '#6b7280' },
+  criteriaRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '5px 4px', borderBottom: '1px solid #f9fafb' },
+  criteriaInfo: { flex: 1, marginRight: 10 },
+  criteriaName: { fontSize: 12, fontWeight: 500, color: '#374151', display: 'block' },
+  criteriaDesc: { fontSize: 10, color: '#9ca3af', display: 'block', marginTop: 1 },
+  scoreInput: { display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 },
+  scoreField: { width: 50, padding: '3px 6px', borderRadius: 5, border: '1px solid #d1d5db', fontSize: 12, textAlign: 'center', outline: 'none' },
+  scoreMax: { fontSize: 11, color: '#6b7280' },
+  groupTotal: { display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '4px 4px 0', alignItems: 'center' },
+  totalBox: { background: '#f0f9ff', borderRadius: 8, padding: '12px 16px', margin: '12px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+  totalScore: { display: 'flex', alignItems: 'baseline', gap: 6 },
+  rankBadge: { padding: '4px 12px', borderRadius: 20, fontSize: 13, fontWeight: 600 },
+  commentBox: { marginTop: 8, display: 'flex', flexDirection: 'column', gap: 5 },
+  textarea: { padding: '8px 10px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 12, outline: 'none', resize: 'vertical' },
+  scoreActions: { display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 12, paddingTop: 10, borderTop: '1px solid #f3f4f6', flexShrink: 0 },
 }
