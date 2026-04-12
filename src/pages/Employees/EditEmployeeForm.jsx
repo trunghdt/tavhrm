@@ -53,18 +53,32 @@ const [selectedDeptId, setSelectedDeptId] = useState(initDeptId)
 
   const handleChange = e => setForm({ ...form, [e.target.name]: e.target.value })
 
-  const handleSubmit = async e => {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
-    const payload = { ...form }
-    if (!payload.end_date) delete payload.end_date
-    if (!payload.department_id) delete payload.department_id
-    const { error } = await supabase.from('employees').update(payload).eq('id', employee.id)
-    if (error) setError(error.message)
-    else onSuccess()
-    setLoading(false)
+const handleSubmit = async e => {
+  e.preventDefault()
+  setLoading(true)
+  setError('')
+  const payload = { ...form }
+  if (!payload.end_date) delete payload.end_date
+  
+  // Lưu department_id theo cấp nhỏ nhất đã chọn
+  if (selectedDeptId && form.team) {
+    payload.department_id = form.team // Có tổ → lưu ID tổ
+  } else if (selectedDeptId) {
+    payload.department_id = selectedDeptId // Có bộ phận → lưu ID bộ phận
+  } else if (selectedBranchId) {
+    payload.department_id = selectedBranchId // Chỉ có chi nhánh → lưu ID chi nhánh
+  } else {
+    payload.department_id = null // Không chọn → null
   }
+
+  const { error } = await supabase
+    .from('employees')
+    .update(payload)
+    .eq('id', employee.id)
+  if (error) setError(error.message)
+  else onSuccess()
+  setLoading(false)
+}
 const branches = departments.filter(d => !d.parent_id)
 const depts = departments.filter(d => d.parent_id === selectedBranchId)
 const teams = departments.filter(d => d.parent_id === selectedDeptId)

@@ -8,6 +8,8 @@ import ImportExcelModal from './ImportExcelModal'
 import ExportExcelModal from './ExportExcelModal'
 import OrgTree from './OrgTree'
 import DeptManager from './DeptManager'
+import RoleAssignModal from './RoleAssignModal'
+import EmployeeRoleModal from './EmployeeRoleModal'
 
 const STATUS_LABELS = { active: 'Đang làm việc', inactive: 'Đã nghỉ', probation: 'Thử việc' }
 const STATUS_COLORS = { active: '#16a34a', inactive: '#dc2626', probation: '#d97706' }
@@ -26,6 +28,9 @@ export default function EmployeesPage() {
   const [showImport, setShowImport] = useState(false)
   const [showExport, setShowExport] = useState(false)
   const [showDeptManager, setShowDeptManager] = useState(false)
+  const [departmentRoles, setDepartmentRoles] = useState([])
+  const [showRoleAssign, setShowRoleAssign] = useState(false)
+  const [assignEmployee, setAssignEmployee] = useState(null)
 
   useEffect(() => {
     fetchDepartments()
@@ -60,23 +65,38 @@ export default function EmployeesPage() {
     salaryData?.forEach(s => {
       if (!salaryMap[s.employee_id]) salaryMap[s.employee_id] = s.base_salary
     })
+
+    // Fetch department roles
+    const { data: rolesData } = await supabase
+    .from('department_roles')
+    .select('*')
+    .eq('is_active', true)
+    setDepartmentRoles(rolesData || [])
+
     setSalaries(salaryMap)
     setLoading(false)
   }
 
-  // Lọc nhân viên theo node được chọn
-  const getFilteredEmployees = () => {
+const getFilteredEmployees = () => {
   if (!selectedNode) return []
 
   let filtered = []
 
   if (selectedNode.id === 'root') {
-    // TAV Corp: chỉ hiện NV không có department_id
     filtered = employees.filter(emp => !emp.department_id)
   } else {
-    // Node cụ thể: chỉ hiện NV được gán ĐÚNG node này
-    // (không hiện NV của node con hay node cha)
-    filtered = employees.filter(emp => emp.department_id === selectedNode.id)
+    // NV thuộc đúng node này
+    const deptEmployees = employees.filter(emp => emp.department_id === selectedNode.id)
+
+    // Leaders của node này (có thể là NV của node khác)
+    const nodeRoles = departmentRoles.filter(r => r.department_id === selectedNode.id)
+    const leaderIds = nodeRoles.map(r => r.employee_id)
+    const leaders = employees.filter(emp => leaderIds.includes(emp.id) && emp.department_id !== selectedNode.id)
+
+    // Gộp: leaders từ node khác + NV của node này (không trùng)
+    const allIds = new Set([...deptEmployees.map(e => e.id)])
+    const extraLeaders = leaders.filter(e => !allIds.has(e.id))
+    filtered = [...deptEmployees, ...extraLeaders]
   }
 
   // Filter theo search
@@ -86,6 +106,18 @@ export default function EmployeesPage() {
       e.employee_code?.toLowerCase().includes(search.toLowerCase()) ||
       e.position?.toLowerCase().includes(search.toLowerCase())
     )
+  }
+
+  // Sắp xếp: Leader → Sub-leader → NV thường
+  if (selectedNode.id !== 'root') {
+    const nodeRoles = departmentRoles.filter(r => r.department_id === selectedNode.id)
+    filtered.sort((a, b) => {
+      const aRole = nodeRoles.find(r => r.employee_id === a.id)
+      const bRole = nodeRoles.find(r => r.employee_id === b.id)
+      const aOrder = aRole?.role_type === 'leader' ? 0 : aRole?.role_type === 'sub_leader' ? 1 : 2
+      const bOrder = bRole?.role_type === 'leader' ? 0 : bRole?.role_type === 'sub_leader' ? 1 : 2
+      return aOrder - bOrder
+    })
   }
 
   return filtered
@@ -152,6 +184,7 @@ const handleDelete = async (emp) => {
               <button style={styles.exportBtn} onClick={() => setShowExport(true)}>📤 Download</button>
             </div>
           )}
+
         </div>
 
         {/* Bảng nhân viên */}
@@ -166,7 +199,7 @@ const handleDelete = async (emp) => {
                 <tr style={styles.thead}>
                   <th style={styles.th}>Mã NV</th>
                   <th style={styles.th}>Họ tên</th>
-                  <th style={styles.th}>Chức vụ</th>
+                  <th style={styles.th}>Chức danh</th>
                   <th style={styles.th}>Loại HĐ</th>
                   <th style={styles.th}>Trạng thái</th>
                   <th style={styles.th}></th>
@@ -191,7 +224,28 @@ const handleDelete = async (emp) => {
                         </div>
                       </div>
                     </td>
-                    <td style={styles.td}>{emp.position || '—'}</td>
+                   <td style={styles.td}>
+  {(() => {
+       // Tìm tất cả roles của NV này trong mọi node
+    const empRoles = departmentRoles.filter(r => r.employee_id === emp.id)
+    
+    // Ưu tiên hiện role của node đang xem
+    const nodeRole = selectedNode?.id !== 'root' 
+      ? empRoles.find(r => r.department_id === selectedNode?.id)
+      : empRoles[0] // Ở root thì lấy role đầu tiên nếu có
+    if (nodeRole) return (
+      <span style={{
+        fontSize: 11, padding: '2px 8px', borderRadius: 10, fontWeight: 500,
+        background: nodeRole.role_type === 'leader' ? '#eff6ff' : '#fffbeb',
+        color: nodeRole.role_type === 'leader' ? '#1a56db' : '#d97706',
+      }}>
+        {nodeRole.role_type === 'leader' ? '👑' : '⭐'} {nodeRole.title || (nodeRole.role_type === 'leader' ? 'Leader' : 'Sub-leader')}
+      </span>
+    )
+    // Hiện chức vụ nếu không có chức danh
+return <span style={{ fontSize: 13, color: '#374151' }}>{emp.position || '—'}</span>
+  })()}
+</td>
                     <td style={styles.td}>
                       <span style={styles.contractBadge}>
                         {emp.employment_type === 'thu_viec' ? 'Thử việc' :
@@ -218,8 +272,12 @@ const handleDelete = async (emp) => {
   </>
 )}
 {role === 'board_manager' && (
-  <button style={{ ...styles.viewBtn, marginLeft: 6, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}
-    onClick={() => handleDelete(emp)}>Xóa</button>
+  <>
+    <button style={{ ...styles.viewBtn, marginLeft: 6, background: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe' }}
+      onClick={() => setAssignEmployee(emp)}>Gán</button>
+    <button style={{ ...styles.viewBtn, marginLeft: 6, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}
+      onClick={() => handleDelete(emp)}>Xóa</button>
+  </>
 )}
                     </td>
                   </tr>
@@ -322,7 +380,15 @@ const handleDelete = async (emp) => {
       {showImport && <ImportExcelModal onClose={() => setShowImport(false)} onSuccess={fetchEmployees} />}
       {showExport && <ExportExcelModal onClose={() => setShowExport(false)} />}
       {showDeptManager && <DeptManager departments={departments} onRefresh={fetchDepartments} onClose={() => setShowDeptManager(false)} />}
-    </div>
+{assignEmployee && (
+  <EmployeeRoleModal
+    employee={assignEmployee}
+    departments={departments}
+    onClose={() => setAssignEmployee(null)}
+    onRefresh={fetchEmployees}
+  />
+)}
+</div>
   )
 }
 
@@ -368,4 +434,5 @@ const styles = {
   infoItem: { display: 'flex', flexDirection: 'column', gap: 3 },
   infoLabel: { fontSize: 11, color: '#6b7280', fontWeight: 600, textTransform: 'uppercase' },
   infoValue: { fontSize: 13, color: '#111827', fontWeight: 500 },
+  roleBtn: { padding: '8px 14px', background: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe', borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: 'pointer' },
 }

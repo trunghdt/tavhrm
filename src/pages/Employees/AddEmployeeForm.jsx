@@ -31,7 +31,16 @@ const handleSubmit = async e => {
 
   const payload = { ...form }
   if (!payload.end_date) delete payload.end_date
-  if (!payload.department_id) delete payload.department_id
+// Lưu department_id theo cấp nhỏ nhất đã chọn
+if (selectedDeptId && form.team) {
+  payload.department_id = form.team
+} else if (selectedDeptId) {
+  payload.department_id = selectedDeptId
+} else if (selectedBranchId) {
+  payload.department_id = selectedBranchId
+} else {
+  payload.department_id = null
+}
 
   // Thêm nhân viên vào database
   const { data: newEmployee, error } = await supabase

@@ -76,7 +76,7 @@ const handleImport = async () => {
       full_name: String(r['Họ tên'] || ''),
       branch: branchName,
       team: teamName,
-      position: String(r['Chức vụ'] || ''),
+      position: String(r['Chức vụ'] || 'Nhân viên'),
       phone: String(r['Số điện thoại'] || ''),
       personal_email: String(r['Email'] || ''),
       gender: r['Giới tính'] === 'Nữ' ? 'female' : 'male',
