@@ -4,8 +4,13 @@ import { useAuthStore } from '../../store/authStore'
 
 const STATUS_LABELS = { draft: 'Nháp', open: 'Đang mở', closed: 'Đã đóng', approved: 'Đã duyệt' }
 const STATUS_COLORS = { draft: '#6b7280', open: '#16a34a', closed: '#d97706', approved: '#1a56db' }
+const EVAL_STATUS = {
+  draft: { label: '💾 Đã lưu nháp', color: '#7c3aed' },
+  submitted: { label: '🟡 TBP đã submit', color: '#d97706' },
+  hr_reviewed: { label: '🔵 HR đã review', color: '#1a56db' },
+  approved: { label: '✅ Đã duyệt', color: '#16a34a' },
+}
 const TEMPLATE_LABELS = { sx: '🏭 Sản xuất', vp: '🏢 Văn phòng', ql: '👔 Quản lý' }
-
 const RANKING = (score) => {
   if (score >= 90) return { label: '🏆 Xuất sắc', color: '#d97706' }
   if (score >= 80) return { label: '⭐⭐ Tốt', color: '#1a56db' }
@@ -22,15 +27,11 @@ export default function EvaluationsPage() {
   const [departments, setDepartments] = useState([])
   const [departmentRoles, setDepartmentRoles] = useState([])
   const [employees, setEmployees] = useState([])
-
-  // Form tạo kỳ
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ title: '', period: '', deadline: '' })
   const [deptAssignments, setDeptAssignments] = useState([])
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
-
-  // Điền điểm
   const [showEvaluate, setShowEvaluate] = useState(false)
   const [selectedCycle, setSelectedCycle] = useState(null)
   const [cycleEmployees, setCycleEmployees] = useState([])
@@ -39,13 +40,10 @@ export default function EvaluationsPage() {
   const [comment, setComment] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [existingEvals, setExistingEvals] = useState([])
-
-  // Chi tiết kỳ
+  const [showSummary, setShowSummary] = useState(false)
   const [selected, setSelected] = useState(null)
 
-  useEffect(() => {
-    fetchAll()
-  }, [])
+  useEffect(() => { fetchAll() }, [])
 
   const fetchAll = async () => {
     setLoading(true)
@@ -70,49 +68,30 @@ export default function EvaluationsPage() {
     setLoading(false)
   }
 
-  // Tìm leader của dept hoặc dept cha
   const findLeader = (deptId) => {
     const leader = departmentRoles.find(r => r.department_id === deptId && r.role_type === 'leader')
     if (leader) return leader
-    // Tìm ở dept cha
     const dept = departments.find(d => d.id === deptId)
     if (dept?.parent_id) return findLeader(dept.parent_id)
     return null
   }
 
-  // Toggle chọn dept
-const toggleDept = (deptId) => {
-  // Lấy tất cả ID con cháu của dept này
-  const getDescendantIds = (id) => {
-    const children = departments.filter(d => d.parent_id === id)
-    return [...children.map(c => c.id), ...children.flatMap(c => getDescendantIds(c.id))]
+  const toggleDept = (deptId) => {
+    const getDescendantIds = (id) => {
+      const children = departments.filter(d => d.parent_id === id)
+      return [...children.map(c => c.id), ...children.flatMap(c => getDescendantIds(c.id))]
+    }
+    const allIds = [deptId, ...getDescendantIds(deptId)]
+    setDeptAssignments(prev => {
+      const isChecked = prev.some(d => d.dept_id === deptId)
+      if (isChecked) return prev.filter(d => !allIds.includes(d.dept_id))
+      const newIds = allIds.filter(id => !prev.some(d => d.dept_id === id))
+      return [...prev, ...newIds.map(id => ({ dept_id: id, template_type: 'sx' }))]
+    })
   }
 
-  const descendantIds = getDescendantIds(deptId)
-  const allIds = [deptId, ...descendantIds]
-
-  setDeptAssignments(prev => {
-    const isChecked = prev.some(d => d.dept_id === deptId)
-
-    if (isChecked) {
-      // Bỏ tick node này và tất cả con cháu
-      return prev.filter(d => !allIds.includes(d.dept_id))
-    } else {
-      // Tick node này và tất cả con cháu (giữ lại các node đã tick trước)
-      const newIds = allIds.filter(id => !prev.some(d => d.dept_id === id))
-      const newAssignments = newIds.map(id => ({
-        dept_id: id,
-        template_type: 'sx' // default
-      }))
-      return [...prev, ...newAssignments]
-    }
-  })
-}
-
   const setDeptTemplate = (deptId, type) => {
-    setDeptAssignments(prev =>
-      prev.map(d => d.dept_id === deptId ? { ...d, template_type: type } : d)
-    )
+    setDeptAssignments(prev => prev.map(d => d.dept_id === deptId ? { ...d, template_type: type } : d))
   }
 
   const handleCreate = async (e) => {
@@ -120,21 +99,12 @@ const toggleDept = (deptId) => {
     if (deptAssignments.length === 0) { setError('Chọn ít nhất 1 bộ phận!'); return }
     setCreating(true)
     setError('')
-
-    const { data: cycle, error: err } = await supabase
-      .from('evaluation_cycles')
-      .insert([{
-        title: form.title,
-        period: form.period,
-        deadline: form.deadline,
-        status: 'open',
-        scope: { dept_assignments: deptAssignments },
-        created_by: (await supabase.auth.getUser()).data.user?.id,
-      }])
-      .select().single()
-
+    const { error: err } = await supabase.from('evaluation_cycles').insert([{
+      title: form.title, period: form.period, deadline: form.deadline,
+      status: 'open', scope: { dept_assignments: deptAssignments },
+      created_by: (await supabase.auth.getUser()).data.user?.id,
+    }])
     if (err) { setError(err.message); setCreating(false); return }
-
     setShowForm(false)
     setForm({ title: '', period: '', deadline: '' })
     setDeptAssignments([])
@@ -144,138 +114,335 @@ const toggleDept = (deptId) => {
 
   const handleOpenEvaluate = async (cycle) => {
     setSelectedCycle(cycle)
-    const scope = cycle.scope || {}
-    const deptAssign = scope.dept_assignments || []
-    const deptIds = deptAssign.map(d => d.dept_id)
-
-    // Lấy NV trong các dept
+    const deptIds = (cycle.scope?.dept_assignments || []).map(d => d.dept_id)
     const { data: emps } = await supabase
-      .from('employees')
-      .select('*, departments(name)')
-      .in('department_id', deptIds)
-      .eq('status', 'active')
-
-    // Lấy đánh giá đã có
+      .from('employees').select('*, departments(name)')
+      .in('department_id', deptIds).eq('status', 'active')
     const { data: evals } = await supabase
-      .from('evaluations')
-      .select('*')
-      .eq('cycle_id', cycle.id)
-
+      .from('evaluations').select('*').eq('cycle_id', cycle.id)
     setExistingEvals(evals || [])
-
-    // Xác định template và evaluator cho từng NV
+    const deptAssign = cycle.scope?.dept_assignments || []
     const result = (emps || []).map(emp => {
       const isLeader = departmentRoles.some(r => r.employee_id === emp.id && r.role_type === 'leader')
       const deptInfo = deptAssign.find(d => d.dept_id === emp.department_id)
       const leader = findLeader(emp.department_id)
       return {
         ...emp,
-        template_type: isLeader ? 'ql' : (deptInfo?.template_type || 'vp'),
+        template_type: isLeader ? 'ql' : (deptInfo?.template_type || 'sx'),
         is_leader: isLeader,
-        evaluator: isLeader ? 'board_manager' : (leader?.employees?.full_name || 'Chưa có leader'),
-        leader_id: isLeader ? null : leader?.employee_id,
+        evaluator: isLeader ? 'Board Manager' : (leader?.employees?.full_name || 'Chưa có leader'),
       }
     })
-
-    // Sắp xếp: Leader → Sub-leader → NV thường
-    result.sort((a, b) => {
-      if (a.is_leader && !b.is_leader) return -1
-      if (!a.is_leader && b.is_leader) return 1
-      return 0
-    })
-
+    result.sort((a, b) => (a.is_leader ? -1 : b.is_leader ? 1 : 0))
     setCycleEmployees(result)
     setShowEvaluate(true)
-  }
-
-  const handleSelectEmployee = (emp) => {
-    setSelectedEmployee(emp)
-    setScores({})
-    setComment('')
-    const existing = existingEvals.find(e => e.employee_id === emp.id)
-    if (existing) {
-      setScores(existing.scores || {})
-      setComment(existing.comment || '')
-    }
+    setShowSummary(false)
   }
 
   const getTemplate = (emp) => templates.find(t => t.template_type === emp?.template_type)
 
-  const calcTotalScore = (emp) => {
+  const calcTotalScore = (scoreData, emp) => {
     const template = getTemplate(emp)
     if (!template?.criteria_data) return 0
     let total = 0
     template.criteria_data.forEach(group => {
-      const groupScores = group.items.map(item => Number(scores[item.name] || 0))
-      const groupSum = groupScores.reduce((a, b) => a + b, 0)
-      const groupMax = group.items.reduce((a, b) => a + b.max_score, 0)
+      const groupSum = group.items.reduce((s, item) => s + (Number(scoreData[item.name]) || 0), 0)
+      const groupMax = group.items.reduce((s, item) => s + item.max_score, 0)
       total += (groupSum / groupMax) * group.weight
     })
     return Math.round(total * 10) / 10
   }
 
-  const handleSubmitEval = async () => {
+  const handleSelectEmployee = (emp) => {
+    const existingEval = existingEvals.find(e => e.employee_id === emp.id)
+    if (role === 'manager') {
+      if (emp.is_leader) return
+      if (['submitted', 'hr_reviewed', 'approved'].includes(existingEval?.status)) {
+        alert('Đánh giá đã được submit và khóa lại!')
+        return
+      }
+    }
+    if (role === 'hr') {
+      if (!existingEval || existingEval.status === 'draft') {
+        alert('Trưởng bộ phận chưa submit đánh giá nhân viên này!')
+        return
+      }
+      if (['hr_reviewed', 'approved'].includes(existingEval?.status)) {
+        alert('Bạn đã review đánh giá này rồi!')
+        return
+      }
+    }
+    if (role === 'board_manager' && !emp.is_leader) {
+      if (!existingEval || existingEval.status !== 'hr_reviewed') {
+        alert('HR chưa review đánh giá của nhân viên này!')
+        return
+      }
+    }
+    setSelectedEmployee(emp)
+    setScores(existingEval?.scores || {})
+    setComment(existingEval?.comment || '')
+  }
+
+  const handleSaveEval = async () => {
     if (!selectedEmployee || !selectedCycle) return
     setSubmitting(true)
-    const totalScore = calcTotalScore(selectedEmployee)
+    const totalScore = calcTotalScore(scores, selectedEmployee)
     const ranking = RANKING(totalScore)
     const userId = (await supabase.auth.getUser()).data.user?.id
     const existing = existingEvals.find(e => e.employee_id === selectedEmployee.id)
 
+    let payload = {
+      scores,
+      total_score: totalScore,
+      ranking: ranking.label,
+      comment,
+      status: 'draft',
+      original_scores: scores,
+      original_comment: comment,
+      evaluator_id: userId,
+    }
+
+    if (role === 'hr') {
+      payload = {
+        hr_scores: scores,
+        hr_comment: comment,
+        total_score: totalScore,
+        ranking: ranking.label,
+        hr_reviewed_by: userId,
+        hr_reviewed_at: new Date().toISOString(),
+        status: existing?.status || 'submitted',
+      }
+    }
+
     if (existing) {
-      await supabase.from('evaluations').update({
-        scores, total_score: totalScore, ranking: ranking.label,
-        comment, status: 'submitted', submitted_at: new Date().toISOString(),
-      }).eq('id', existing.id)
+      await supabase.from('evaluations').update(payload).eq('id', existing.id)
     } else {
       await supabase.from('evaluations').insert([{
         cycle_id: selectedCycle.id,
         employee_id: selectedEmployee.id,
-        evaluator_id: userId,
-        scores, total_score: totalScore, ranking: ranking.label,
-        comment, status: 'submitted', submitted_at: new Date().toISOString(),
+        ...payload,
       }])
     }
 
-    // Reload evals
     const { data: evals } = await supabase.from('evaluations').select('*').eq('cycle_id', selectedCycle.id)
     setExistingEvals(evals || [])
     setSelectedEmployee(null)
     setSubmitting(false)
   }
 
-  // Lọc NV theo role
+const handleSubmitAll = async () => {
+  if (!confirm('Xác nhận submit toàn bộ đánh giá?')) return
+  const userId = (await supabase.auth.getUser()).data.user?.id
+
+  if (role === 'manager') {
+    const draftEvals = existingEvals.filter(e => e.status === 'draft')
+    if (draftEvals.length === 0) {
+      alert('Không có đánh giá nào ở trạng thái đã lưu nháp!')
+      return
+    }
+    for (const ev of draftEvals) {
+      await supabase.from('evaluations')
+        .update({ status: 'submitted', submitted_at: new Date().toISOString() })
+        .eq('id', ev.id)
+    }
+    alert(`Đã submit ${draftEvals.length} đánh giá lên HR!`)
+
+  } else if (role === 'hr') {
+    const toSubmit = existingEvals.filter(e => e.status === 'submitted')
+    if (toSubmit.length === 0) {
+      alert('Không có đánh giá nào ở trạng thái TBP đã submit!')
+      return
+    }
+    for (const ev of toSubmit) {
+      await supabase.from('evaluations')
+        .update({
+          status: 'hr_reviewed',
+          hr_reviewed_by: userId,
+          hr_reviewed_at: new Date().toISOString(),
+        })
+        .eq('id', ev.id)
+    }
+    alert(`Đã submit ${toSubmit.length} đánh giá lên Ban lãnh đạo!`)
+
+  } else if (role === 'board_manager') {
+    const toApprove = existingEvals.filter(e => e.status === 'hr_reviewed')
+    if (toApprove.length === 0) {
+      alert('Không có đánh giá nào ở trạng thái HR đã review!')
+      return
+    }
+    for (const ev of toApprove) {
+      await supabase.from('evaluations')
+        .update({
+          status: 'approved',
+          approved_by: userId,
+          approved_at: new Date().toISOString(),
+        })
+        .eq('id', ev.id)
+    }
+    alert(`Đã phê duyệt ${toApprove.length} đánh giá!`)
+  }
+
+  const { data: evals } = await supabase
+    .from('evaluations').select('*').eq('cycle_id', selectedCycle.id)
+  setExistingEvals(evals || [])
+}
+
+  const handleApprove = async (empId) => {
+    const ev = existingEvals.find(e => e.employee_id === empId)
+    if (!ev) return
+    const userId = (await supabase.auth.getUser()).data.user?.id
+    await supabase.from('evaluations').update({
+      status: 'approved',
+      approved_by: userId,
+      approved_at: new Date().toISOString(),
+    }).eq('id', ev.id)
+    const { data: evals } = await supabase.from('evaluations').select('*').eq('cycle_id', selectedCycle.id)
+    setExistingEvals(evals || [])
+  }
+
   const visibleEmployees = cycleEmployees.filter(emp => {
     if (role === 'board_manager') return true
-    if (role === 'hr') return true
+    if (role === 'hr') return !emp.is_leader
     if (role === 'manager') return !emp.is_leader
     return false
   })
 
   const canCreate = role === 'board_manager' || role === 'hr'
 
-  // Build dept tree cho form
   const buildDeptOptions = (depts, parentId = null, level = 0) => {
-    return depts
-      .filter(d => d.parent_id === parentId)
-      .flatMap(d => [
-        { ...d, level },
-        ...buildDeptOptions(depts, d.id, level + 1)
-      ])
+    return depts.filter(d => d.parent_id === parentId).flatMap(d => [
+      { ...d, level },
+      ...buildDeptOptions(depts, d.id, level + 1)
+    ])
   }
   const flatDepts = buildDeptOptions(departments)
+
+  const SummaryView = () => {
+    const nonLeaders = cycleEmployees.filter(e => !e.is_leader)
+    const leaders = cycleEmployees.filter(e => e.is_leader)
+
+    const showGroup = (group, title) => (
+      <div style={{ marginBottom: 24 }}>
+        <h3 style={{ fontSize: 14, fontWeight: 700, color: '#374151', marginBottom: 12 }}>{title}</h3>
+        <table style={styles.table}>
+          <thead>
+            <tr style={styles.thead}>
+              <th style={styles.th}>Nhân viên</th>
+              <th style={styles.th}>Loại ĐG</th>
+              <th style={styles.th}>Điểm TBP</th>
+              {(role === 'hr' || role === 'board_manager') && <th style={styles.th}>Điểm HR</th>}
+              <th style={styles.th}>Tổng điểm</th>
+              <th style={styles.th}>Xếp loại</th>
+              <th style={styles.th}>Trạng thái</th>
+              <th style={styles.th}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {group.map(emp => {
+              const ev = existingEvals.find(e => e.employee_id === emp.id)
+              const tbpScore = ev?.original_scores || ev?.scores
+              const hrScore = ev?.hr_scores
+              const finalScore = ev?.total_score
+              const evalStatus = ev?.status || 'draft'
+              const rankInfo = finalScore ? RANKING(finalScore) : null
+              const hasHrEdit = !!ev?.hr_scores
+              const canEdit =
+                (role === 'manager' && ev && evalStatus === 'draft') ||
+                (role === 'hr' && ev && evalStatus === 'submitted') ||
+                (role === 'board_manager' && ev && evalStatus === 'hr_reviewed')
+              return (
+                <tr key={emp.id} style={styles.tr}>
+                  <td style={styles.td}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ ...styles.empAvatar, width: 28, height: 28, fontSize: 11 }}>{emp.full_name?.[0]}</div>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>{emp.full_name}</div>
+                        <div style={{ fontSize: 11, color: '#6b7280' }}>{emp.employee_code}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td style={styles.td}><span style={{ fontSize: 11 }}>{TEMPLATE_LABELS[emp.template_type]}</span></td>
+                  <td style={styles.td}>
+                    {tbpScore ? <span style={{ fontSize: 13 }}>{calcTotalScore(tbpScore, emp)} đ</span>
+                      : <span style={{ color: '#9ca3af', fontSize: 12 }}>Chưa đánh giá</span>}
+                  </td>
+                  {(role === 'hr' || role === 'board_manager') && (
+                    <td style={styles.td}>
+                      {hasHrEdit ? <span style={{ fontSize: 13, color: '#1a56db' }}>{calcTotalScore(hrScore, emp)} đ ✏️</span>
+                        : <span style={{ color: '#9ca3af', fontSize: 12 }}>—</span>}
+                    </td>
+                  )}
+                  <td style={styles.td}>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: '#111827' }}>{finalScore || '—'}</span>
+                  </td>
+                  <td style={styles.td}>
+                    {rankInfo ? <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, background: rankInfo.color + '15', color: rankInfo.color, fontWeight: 600 }}>{rankInfo.label}</span> : '—'}
+                  </td>
+                  <td style={styles.td}>
+                    <span style={{ fontSize: 11, color: ev ? EVAL_STATUS[evalStatus]?.color : '#9ca3af' }}>
+                      {ev ? EVAL_STATUS[evalStatus]?.label : '⬜ Chưa đánh giá'}
+                    </span>
+                  </td>
+                  <td style={styles.td}>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {canEdit && (
+                        <button style={styles.smallBtn} onClick={() => { setShowSummary(false); handleSelectEmployee(emp) }}>
+                          ✏️ {role === 'hr' ? 'Review' : 'Sửa'}
+                        </button>
+                      )}
+                      {role === 'board_manager' && evalStatus === 'hr_reviewed' && (
+                        <button style={{ ...styles.smallBtn, background: '#f0fdf4', color: '#16a34a', border: '1px solid #86efac' }}
+                          onClick={() => handleApprove(emp.id)}>✅ Duyệt</button>
+                      )}
+                      {evalStatus === 'approved' && <span style={{ fontSize: 11, color: '#16a34a' }}>✅ Hoàn thành</span>}
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    )
+
+    return (
+      <div style={styles.overlay} onClick={() => setShowSummary(false)}>
+        <div style={{ ...styles.modal, width: 900, maxHeight: '85vh' }} onClick={e => e.stopPropagation()}>
+          <div style={styles.modalHeader}>
+            <div>
+              <h2 style={styles.modalTitle}>📊 Bảng tổng hợp đánh giá</h2>
+              <p style={{ fontSize: 13, color: '#6b7280', marginTop: 4 }}>{selectedCycle?.title}</p>
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              {role === 'manager' && (
+                <button style={{ ...styles.submitBtn, fontSize: 13 }} onClick={handleSubmitAll}>✅ Submit lên HR</button>
+              )}
+              {role === 'hr' && (
+                <button style={{ ...styles.submitBtn, fontSize: 13 }} onClick={handleSubmitAll}>🔵 HR Submit lên BLĐ</button>
+              )}
+              {role === 'board_manager' && (
+                <button style={{ ...styles.submitBtn, fontSize: 13, background: '#16a34a' }} onClick={handleSubmitAll}>✅ Duyệt tất cả</button>
+              )}
+              <button style={styles.closeBtn} onClick={() => setShowSummary(false)}>✕</button>
+            </div>
+          </div>
+          <div style={{ overflowY: 'auto', padding: 24 }}>
+            {role === 'board_manager' && leaders.length > 0 && showGroup(leaders, '👔 Trưởng bộ phận')}
+            {showGroup(nonLeaders, '👥 Nhân viên')}
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div>
       <div style={styles.headerRow}>
         {canCreate && (
-          <button style={styles.addBtn} onClick={() => { setShowForm(true); setError('') }}>
-            + Tạo kỳ đánh giá
-          </button>
+          <button style={styles.addBtn} onClick={() => { setShowForm(true); setError('') }}>+ Tạo kỳ đánh giá</button>
         )}
       </div>
 
-      {/* Form tạo kỳ */}
       {showForm && (
         <div style={styles.formCard}>
           <h3 style={styles.formTitle}>Tạo kỳ đánh giá mới</h3>
@@ -297,47 +464,32 @@ const toggleDept = (deptId) => {
                   value={form.deadline} onChange={e => setForm({ ...form, deadline: e.target.value })} required />
               </div>
             </div>
-
-            {/* Chọn bộ phận */}
             <div style={styles.deptSection}>
               <p style={styles.deptTitle}>📋 Chọn bộ phận & loại đánh giá</p>
-              <p style={styles.deptSub}>⚠️ Leader sẽ tự động được đánh giá theo loại <strong>Quản lý</strong> bởi Board Manager</p>
+              <p style={styles.deptSub}>⚠️ Leader tự động được xếp nhóm <strong>Quản lý</strong> do Board Manager đánh giá</p>
               <div style={styles.deptList}>
                 {flatDepts.map(dept => {
                   const assigned = deptAssignments.find(d => d.dept_id === dept.id)
                   const leader = findLeader(dept.id)
+                  const descendantIds = (() => {
+                    const getIds = (id) => {
+                      const children = departments.filter(d => d.parent_id === id)
+                      return [...children.map(c => c.id), ...children.flatMap(c => getIds(c.id))]
+                    }
+                    return getIds(dept.id)
+                  })()
+                  const someChecked = descendantIds.some(id => deptAssignments.some(d => d.dept_id === id))
+                  const allChecked = descendantIds.length > 0 && descendantIds.every(id => deptAssignments.some(d => d.dept_id === id))
                   return (
                     <div key={dept.id} style={{ ...styles.deptItem, ...(assigned ? styles.deptItemActive : {}), paddingLeft: 12 + dept.level * 16 }}>
                       <div style={styles.deptItemLeft}>
-                        <input
-  type="checkbox"
-  checked={!!assigned}
-  ref={el => {
-    if (el) {
-      // Trạng thái partial: có một số con được tick
-      const descendantIds = (() => {
-        const getIds = (id) => {
-          const children = departments.filter(d => d.parent_id === id)
-          return [...children.map(c => c.id), ...children.flatMap(c => getIds(c.id))]
-        }
-        return getIds(dept.id)
-      })()
-      const hasDescendants = descendantIds.length > 0
-      const someChecked = hasDescendants && descendantIds.some(id => deptAssignments.some(d => d.dept_id === id))
-      const allChecked = hasDescendants && descendantIds.every(id => deptAssignments.some(d => d.dept_id === id))
-      el.indeterminate = someChecked && !allChecked && !assigned
-    }
-  }}
-  onChange={() => toggleDept(dept.id)}
-/>
-                        <span style={{ fontSize: dept.level === 0 ? 14 : dept.level === 1 ? 13 : 12, fontWeight: dept.level === 0 ? 700 : dept.level === 1 ? 600 : 400, color: '#111827' }}>
+                        <input type="checkbox" checked={!!assigned}
+                          ref={el => { if (el) el.indeterminate = someChecked && !allChecked && !assigned }}
+                          onChange={() => toggleDept(dept.id)} />
+                        <span style={{ fontSize: dept.level === 0 ? 14 : 13, fontWeight: dept.level < 2 ? 600 : 400 }}>
                           {dept.level > 0 ? '└ ' : ''}{dept.name}
                         </span>
-                        {leader && (
-                          <span style={styles.leaderTag}>
-                            👑 {leader.employees?.full_name}
-                          </span>
-                        )}
+                        {leader && <span style={styles.leaderTag}>👑 {leader.employees?.full_name}</span>}
                       </div>
                       {assigned && (
                         <select style={styles.templateSelect} value={assigned.template_type}
@@ -351,11 +503,9 @@ const toggleDept = (deptId) => {
                 })}
               </div>
             </div>
-
-            {/* Preview số NV */}
             {deptAssignments.length > 0 && (
               <div style={styles.previewBox}>
-                <p style={styles.previewTitle}>👥 Tổng quan kỳ đánh giá:</p>
+                <p style={styles.previewTitle}>👥 Tổng quan:</p>
                 {deptAssignments.map(d => {
                   const dept = departments.find(dep => dep.id === d.dept_id)
                   const empCount = employees.filter(e => e.department_id === d.dept_id).length
@@ -364,103 +514,89 @@ const toggleDept = (deptId) => {
                     <div key={d.dept_id} style={styles.previewItem}>
                       <span style={styles.previewDept}>{dept?.name}</span>
                       <span style={styles.previewMeta}>{empCount} NV · {TEMPLATE_LABELS[d.template_type]}</span>
-                      <span style={styles.previewLeader}>
-                        {leader ? `👑 ${leader.employees?.full_name}` : '⚠️ Chưa có leader'}
-                      </span>
+                      <span style={styles.previewLeader}>{leader ? `👑 ${leader.employees?.full_name}` : '⚠️ Chưa có leader'}</span>
                     </div>
                   )
                 })}
               </div>
             )}
-
             {error && <p style={styles.error}>{error}</p>}
             <div style={styles.formActions}>
               <button type="button" style={styles.cancelBtn} onClick={() => { setShowForm(false); setDeptAssignments([]) }}>Hủy</button>
-              <button type="submit" style={styles.submitBtn} disabled={creating}>
-                {creating ? 'Đang tạo...' : 'Tạo kỳ đánh giá'}
-              </button>
+              <button type="submit" style={styles.submitBtn} disabled={creating}>{creating ? 'Đang tạo...' : 'Tạo kỳ đánh giá'}</button>
             </div>
           </form>
         </div>
       )}
 
-      {/* Danh sách kỳ */}
-      {loading ? (
-        <p style={{ color: '#6b7280' }}>Đang tải...</p>
-      ) : cycles.length === 0 ? (
-        <div style={styles.empty}>
-          <p style={styles.emptyIcon}>⭐</p>
-          <p style={styles.emptyText}>Chưa có kỳ đánh giá nào</p>
-          <p style={styles.emptySub}>HR tạo kỳ đánh giá để bắt đầu quy trình</p>
-        </div>
-      ) : (
-        <div style={styles.grid}>
-          {cycles.map(cycle => (
-            <div key={cycle.id} style={styles.card}>
-              <div style={styles.cardHeader}>
-                <h3 style={styles.cardTitle}>{cycle.title}</h3>
-                <span style={{ ...styles.badge, background: (STATUS_COLORS[cycle.status] || '#6b7280') + '15', color: STATUS_COLORS[cycle.status] || '#6b7280' }}>
-                  {STATUS_LABELS[cycle.status] || cycle.status}
-                </span>
-              </div>
-              <div style={styles.cardBody}>
-                <div style={styles.infoRow}>
-                  <span style={styles.infoLabel}>Kỳ</span>
-                  <span style={styles.infoValue}>{cycle.period || '—'}</span>
+      {loading ? <p style={{ color: '#6b7280' }}>Đang tải...</p>
+        : cycles.length === 0 ? (
+          <div style={styles.empty}>
+            <p style={styles.emptyIcon}>⭐</p>
+            <p style={styles.emptyText}>Chưa có kỳ đánh giá nào</p>
+            <p style={styles.emptySub}>HR tạo kỳ đánh giá để bắt đầu quy trình</p>
+          </div>
+        ) : (
+          <div style={styles.grid}>
+            {cycles.map(cycle => (
+              <div key={cycle.id} style={styles.card}>
+                <div style={styles.cardHeader}>
+                  <h3 style={styles.cardTitle}>{cycle.title}</h3>
+                  <span style={{ ...styles.badge, background: (STATUS_COLORS[cycle.status] || '#6b7280') + '15', color: STATUS_COLORS[cycle.status] || '#6b7280' }}>
+                    {STATUS_LABELS[cycle.status] || cycle.status}
+                  </span>
                 </div>
-                <div style={styles.infoRow}>
-                  <span style={styles.infoLabel}>Deadline</span>
-                  <span style={styles.infoValue}>{cycle.deadline ? new Date(cycle.deadline).toLocaleDateString('vi-VN') : '—'}</span>
+                <div style={styles.cardBody}>
+                  <div style={styles.infoRow}><span style={styles.infoLabel}>Kỳ</span><span style={styles.infoValue}>{cycle.period || '—'}</span></div>
+                  <div style={styles.infoRow}><span style={styles.infoLabel}>Deadline</span><span style={styles.infoValue}>{cycle.deadline ? new Date(cycle.deadline).toLocaleDateString('vi-VN') : '—'}</span></div>
+                  <div style={styles.infoRow}><span style={styles.infoLabel}>Bộ phận</span><span style={styles.infoValue}>{cycle.scope?.dept_assignments?.length || 0} bộ phận</span></div>
                 </div>
-                <div style={styles.infoRow}>
-                  <span style={styles.infoLabel}>Bộ phận</span>
-                  <span style={styles.infoValue}>{cycle.scope?.dept_assignments?.length || 0} bộ phận</span>
+                <div style={styles.cardFooter}>
+                  {cycle.status === 'open' && (
+                    <>
+                      <button style={styles.evalBtn} onClick={() => handleOpenEvaluate(cycle)}>📝 Đánh giá</button>
+                      <button style={{ ...styles.evalBtn, background: '#f0f9ff', color: '#0369a1', border: '1px solid #7dd3fc' }}
+                        onClick={async () => { await handleOpenEvaluate(cycle); setShowSummary(true) }}>
+                        📊 Tổng hợp
+                      </button>
+                    </>
+                  )}
+                  <button style={styles.viewBtn} onClick={() => setSelected(cycle)}>Chi tiết →</button>
                 </div>
               </div>
-              <div style={styles.cardFooter}>
-                {cycle.status === 'open' && (
-                  <button style={styles.evalBtn} onClick={() => handleOpenEvaluate(cycle)}>
-                    📝 Điền đánh giá
-                  </button>
-                )}
-                <button style={styles.viewBtn} onClick={() => setSelected(cycle)}>Chi tiết →</button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
 
-      {/* Modal điền điểm */}
-      {showEvaluate && selectedCycle && (
+      {showEvaluate && selectedCycle && !showSummary && (
         <div style={styles.overlay} onClick={() => { setShowEvaluate(false); setSelectedEmployee(null) }}>
           <div style={{ ...styles.modal, width: selectedEmployee ? 760 : 480 }} onClick={e => e.stopPropagation()}>
             <div style={styles.modalHeader}>
               <div>
                 <h2 style={styles.modalTitle}>📝 {selectedCycle.title}</h2>
                 <p style={{ fontSize: 13, color: '#6b7280', marginTop: 4 }}>
-                  {selectedEmployee ? `Đang đánh giá: ${selectedEmployee.full_name}` : 'Chọn nhân viên để bắt đầu'}
+                  {role === 'manager' ? 'Trưởng bộ phận điền điểm' : role === 'hr' ? 'HR review đánh giá' : 'Board Manager đánh giá'}
                 </p>
               </div>
-              <button style={styles.closeBtn} onClick={() => { setShowEvaluate(false); setSelectedEmployee(null) }}>✕</button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button style={{ ...styles.evalBtn, fontSize: 12 }} onClick={() => setShowSummary(true)}>📊 Tổng hợp</button>
+                <button style={styles.closeBtn} onClick={() => { setShowEvaluate(false); setSelectedEmployee(null) }}>✕</button>
+              </div>
             </div>
-
             <div style={{ display: 'flex', maxHeight: '70vh', overflow: 'hidden' }}>
-              {/* Danh sách NV */}
               <div style={styles.empList}>
-                {/* Leader */}
-                {visibleEmployees.filter(e => e.is_leader).length > 0 && role === 'board_manager' && (
+                {role === 'board_manager' && cycleEmployees.filter(e => e.is_leader).length > 0 && (
                   <>
                     <p style={styles.groupLabel}>👔 Trưởng bộ phận</p>
-                    {visibleEmployees.filter(e => e.is_leader).map(emp => {
-                      const evalDone = existingEvals.find(ev => ev.employee_id === emp.id)
+                    {cycleEmployees.filter(e => e.is_leader).map(emp => {
+                      const ev = existingEvals.find(e => e.employee_id === emp.id)
                       return (
-                        <div key={emp.id}
-                          style={{ ...styles.empItem, ...(selectedEmployee?.id === emp.id ? styles.empItemActive : {}) }}
+                        <div key={emp.id} style={{ ...styles.empItem, ...(selectedEmployee?.id === emp.id ? styles.empItemActive : {}) }}
                           onClick={() => handleSelectEmployee(emp)}>
                           <div style={{ ...styles.empAvatar, background: '#7c3aed' }}>{emp.full_name?.[0]}</div>
                           <div>
                             <div style={styles.empName}>{emp.full_name}</div>
-                            <div style={styles.empMeta}>👔 QL {evalDone ? '✅' : ''}</div>
+                            <div style={styles.empMeta}>{ev ? EVAL_STATUS[ev.status]?.label : '⬜ Chưa đánh giá'}</div>
                           </div>
                         </div>
                       )
@@ -468,53 +604,45 @@ const toggleDept = (deptId) => {
                     <div style={{ borderTop: '1px solid #f3f4f6', margin: '8px 0' }} />
                   </>
                 )}
-
-                {/* NV thường */}
                 <p style={styles.groupLabel}>👥 Nhân viên</p>
                 {visibleEmployees.filter(e => !e.is_leader).map(emp => {
-                  const evalDone = existingEvals.find(ev => ev.employee_id === emp.id)
+                  const ev = existingEvals.find(e => e.employee_id === emp.id)
                   return (
-                    <div key={emp.id}
-                      style={{ ...styles.empItem, ...(selectedEmployee?.id === emp.id ? styles.empItemActive : {}) }}
+                    <div key={emp.id} style={{ ...styles.empItem, ...(selectedEmployee?.id === emp.id ? styles.empItemActive : {}) }}
                       onClick={() => handleSelectEmployee(emp)}>
                       <div style={styles.empAvatar}>{emp.full_name?.[0]}</div>
                       <div>
                         <div style={styles.empName}>{emp.full_name}</div>
-                        <div style={styles.empMeta}>
-                          {TEMPLATE_LABELS[emp.template_type]} {evalDone ? '✅' : ''}
-                        </div>
+                        <div style={styles.empMeta}>{ev ? EVAL_STATUS[ev.status]?.label : '⬜ Chưa đánh giá'}</div>
                       </div>
                     </div>
                   )
                 })}
-
-                {visibleEmployees.length === 0 && (
-                  <p style={{ fontSize: 12, color: '#9ca3af', padding: 8 }}>Không có nhân viên</p>
-                )}
               </div>
-
-              {/* Form điền điểm */}
               {selectedEmployee && (
                 <div style={styles.scoreForm}>
-                  {/* Header NV */}
                   <div style={styles.scoreHeader}>
                     <div>
                       <strong style={{ fontSize: 14 }}>{selectedEmployee.full_name}</strong>
-                      <span style={{ ...styles.templateBadge, marginLeft: 8 }}>
-                        {TEMPLATE_LABELS[selectedEmployee.template_type]}
-                      </span>
+                      <span style={{ ...styles.templateBadge, marginLeft: 8 }}>{TEMPLATE_LABELS[selectedEmployee.template_type]}</span>
                     </div>
                     <div style={{ fontSize: 12, color: '#6b7280' }}>
-                      Người đánh giá: {selectedEmployee.is_leader ? 'Board Manager' : selectedEmployee.evaluator}
+                      {role === 'hr' ? '🔵 HR đang review' : role === 'board_manager' ? '👑 Board Manager' : `Người ĐG: ${selectedEmployee.evaluator}`}
                     </div>
                   </div>
-
+                  {(role === 'hr' || role === 'board_manager') && existingEvals.find(e => e.employee_id === selectedEmployee.id)?.original_scores && (
+                    <div style={styles.originalScoreBox}>
+                      <p style={{ fontSize: 11, fontWeight: 600, color: '#d97706' }}>
+                        📋 Điểm gốc TBP: {calcTotalScore(existingEvals.find(e => e.employee_id === selectedEmployee.id)?.original_scores || {}, selectedEmployee)} điểm
+                      </p>
+                    </div>
+                  )}
                   <div style={{ overflowY: 'auto', flex: 1, paddingRight: 8 }}>
                     {(getTemplate(selectedEmployee)?.criteria_data || []).map((group, gi) => (
                       <div key={gi} style={styles.criteriaGroup}>
                         <div style={styles.groupHeader}>
                           <span style={styles.groupName}>{group.group}</span>
-                          <span style={styles.groupWeight}>Trọng số: {group.weight}% · Tổng: {group.total_score} điểm</span>
+                          <span style={styles.groupWeight}>Trọng số: {group.weight}% · /{group.total_score}</span>
                         </div>
                         {group.items.map((item, ii) => (
                           <div key={ii} style={styles.criteriaRow}>
@@ -523,62 +651,43 @@ const toggleDept = (deptId) => {
                               <span style={styles.criteriaDesc}>{item.description}</span>
                             </div>
                             <div style={styles.scoreInput}>
-                              <input
-                                type="number" min="0" max={item.max_score}
-                                style={{
-                                  ...styles.scoreField,
-                                  borderColor: scores[item.name] > item.max_score ? '#dc2626' : '#d1d5db',
-                                }}
-                                placeholder="0"
+                              <input type="number" min="0" max={item.max_score} style={styles.scoreField} placeholder="0"
                                 value={scores[item.name] || ''}
-                                onChange={e => setScores({ ...scores, [item.name]: Math.min(Number(e.target.value), item.max_score) })}
-                              />
+                                onChange={e => setScores({ ...scores, [item.name]: Math.min(Number(e.target.value), item.max_score) })} />
                               <span style={styles.scoreMax}>/{item.max_score}</span>
                             </div>
                           </div>
                         ))}
-                        {/* Tổng nhóm */}
                         <div style={styles.groupTotal}>
-                          <span style={{ fontSize: 12, color: '#6b7280' }}>Tổng nhóm:</span>
-                          <span style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>
-                            {group.items.reduce((sum, item) => sum + (Number(scores[item.name]) || 0), 0)} / {group.total_score}
+                          <span style={{ fontSize: 11, color: '#6b7280' }}>Tổng nhóm:</span>
+                          <span style={{ fontSize: 12, fontWeight: 600 }}>
+                            {group.items.reduce((s, item) => s + (Number(scores[item.name]) || 0), 0)}/{group.total_score}
                           </span>
                         </div>
                       </div>
                     ))}
-
-                    {/* Tổng điểm */}
                     {Object.keys(scores).length > 0 && (
                       <div style={styles.totalBox}>
                         <div style={styles.totalScore}>
-                          <span style={{ fontSize: 14, color: '#374151' }}>Tổng điểm quy đổi:</span>
-                          <span style={{ fontSize: 28, fontWeight: 700, color: '#1a56db' }}>
-                            {calcTotalScore(selectedEmployee)}
-                          </span>
-                          <span style={{ fontSize: 13, color: '#6b7280' }}>/100</span>
+                          <span style={{ fontSize: 13 }}>Tổng điểm:</span>
+                          <span style={{ fontSize: 26, fontWeight: 700, color: '#1a56db' }}>{calcTotalScore(scores, selectedEmployee)}</span>
+                          <span style={{ fontSize: 12, color: '#6b7280' }}>/100</span>
                         </div>
-                        <div style={{
-                          ...styles.rankBadge,
-                          background: RANKING(calcTotalScore(selectedEmployee)).color + '15',
-                          color: RANKING(calcTotalScore(selectedEmployee)).color,
-                        }}>
-                          {RANKING(calcTotalScore(selectedEmployee)).label}
+                        <div style={{ ...styles.rankBadge, background: RANKING(calcTotalScore(scores, selectedEmployee)).color + '15', color: RANKING(calcTotalScore(scores, selectedEmployee)).color }}>
+                          {RANKING(calcTotalScore(scores, selectedEmployee)).label}
                         </div>
                       </div>
                     )}
-
-                    {/* Nhận xét */}
                     <div style={styles.commentBox}>
-                      <label style={styles.label}>Nhận xét tổng quan</label>
+                      <label style={styles.label}>Nhận xét</label>
                       <textarea style={styles.textarea} placeholder="Nhận xét về nhân viên..."
                         value={comment} onChange={e => setComment(e.target.value)} rows={3} />
                     </div>
                   </div>
-
                   <div style={styles.scoreActions}>
                     <button style={styles.cancelBtn} onClick={() => setSelectedEmployee(null)}>Hủy</button>
-                    <button style={styles.submitBtn} onClick={handleSubmitEval} disabled={submitting}>
-                      {submitting ? 'Đang lưu...' : '✅ Lưu đánh giá'}
+                    <button style={styles.submitBtn} onClick={handleSaveEval} disabled={submitting}>
+                      {submitting ? 'Đang lưu...' : '💾 Lưu'}
                     </button>
                   </div>
                 </div>
@@ -588,7 +697,8 @@ const toggleDept = (deptId) => {
         </div>
       )}
 
-      {/* Modal chi tiết kỳ */}
+      {showSummary && selectedCycle && <SummaryView />}
+
       {selected && (
         <div style={styles.overlay} onClick={() => setSelected(null)}>
           <div style={styles.modal} onClick={e => e.stopPropagation()}>
@@ -615,47 +725,14 @@ const toggleDept = (deptId) => {
                   </div>
                 ))}
               </div>
-
-              {/* Bộ phận trong kỳ */}
-              {selected.scope?.dept_assignments?.length > 0 && (
-                <div style={{ marginBottom: 20 }}>
-                  <p style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8 }}>Bộ phận tham gia:</p>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                    {selected.scope.dept_assignments.map(d => {
-                      const dept = departments.find(dep => dep.id === d.dept_id)
-                      const leader = findLeader(d.dept_id)
-                      return (
-                        <div key={d.dept_id} style={styles.deptChip}>
-                          <span>{dept?.name || '—'}</span>
-                          <span style={{ color: '#6b7280' }}>· {TEMPLATE_LABELS[d.template_type]}</span>
-                          {leader && <span style={{ color: '#1a56db' }}>· 👑 {leader.employees?.full_name}</span>}
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {canCreate && (
+              {canCreate && selected.status === 'open' && (
                 <div style={styles.actionRow}>
-                  {selected.status === 'open' && (
-                    <>
-                      <button style={styles.primaryBtn} onClick={() => { setSelected(null); handleOpenEvaluate(selected) }}>
-                        📝 Điền đánh giá
-                      </button>
-                      {role === 'board_manager' && (
-                        <button style={styles.warningBtn} onClick={async () => {
-                          await supabase.from('evaluation_cycles').update({ status: 'closed' }).eq('id', selected.id)
-                          fetchAll(); setSelected(null)
-                        }}>Đóng kỳ</button>
-                      )}
-                    </>
-                  )}
-                  {selected.status === 'closed' && role === 'board_manager' && (
-                    <button style={styles.primaryBtn} onClick={async () => {
-                      await supabase.from('evaluation_cycles').update({ status: 'approved' }).eq('id', selected.id)
+                  <button style={styles.primaryBtn} onClick={() => { setSelected(null); handleOpenEvaluate(selected) }}>📝 Điền đánh giá</button>
+                  {role === 'board_manager' && (
+                    <button style={styles.warningBtn} onClick={async () => {
+                      await supabase.from('evaluation_cycles').update({ status: 'closed' }).eq('id', selected.id)
                       fetchAll(); setSelected(null)
-                    }}>✅ Phê duyệt</button>
+                    }}>Đóng kỳ</button>
                   )}
                 </div>
               )}
@@ -708,7 +785,7 @@ const styles = {
   infoRow: { display: 'flex', justifyContent: 'space-between' },
   infoLabel: { fontSize: 13, color: '#6b7280' },
   infoValue: { fontSize: 13, fontWeight: 500, color: '#111827' },
-  cardFooter: { borderTop: '1px solid #f3f4f6', paddingTop: 12, display: 'flex', gap: 8 },
+  cardFooter: { borderTop: '1px solid #f3f4f6', paddingTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' },
   evalBtn: { padding: '6px 14px', background: '#1a56db', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' },
   viewBtn: { background: 'none', border: 'none', color: '#1a56db', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: 0 },
   overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 },
@@ -719,7 +796,6 @@ const styles = {
   modalBody: { padding: 24, overflowY: 'auto' },
   infoGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 },
   infoItem: { display: 'flex', flexDirection: 'column', gap: 4 },
-  deptChip: { display: 'flex', gap: 6, fontSize: 12, padding: '4px 10px', background: '#f8fafc', borderRadius: 6, border: '1px solid #e5e7eb' },
   actionRow: { display: 'flex', gap: 12 },
   primaryBtn: { padding: '10px 20px', background: '#1a56db', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' },
   warningBtn: { padding: '10px 20px', background: '#fef3c7', color: '#d97706', border: '1px solid #fcd34d', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' },
@@ -730,11 +806,12 @@ const styles = {
   empAvatar: { width: 28, height: 28, borderRadius: '50%', background: '#1a56db', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 11, flexShrink: 0 },
   empName: { fontSize: 12, fontWeight: 600, color: '#111827' },
   empMeta: { fontSize: 10, color: '#6b7280' },
-  scoreForm: { flex: 1, padding: 16, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 0 },
-  scoreHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, paddingBottom: 10, borderBottom: '1px solid #f3f4f6', flexShrink: 0 },
+  scoreForm: { flex: 1, padding: 16, display: 'flex', flexDirection: 'column', overflow: 'hidden' },
+  scoreHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid #f3f4f6', flexShrink: 0 },
   templateBadge: { fontSize: 11, background: '#eff6ff', color: '#1a56db', padding: '2px 7px', borderRadius: 10 },
-  criteriaGroup: { marginBottom: 14 },
-  groupHeader: { display: 'flex', justifyContent: 'space-between', background: '#f8fafc', padding: '7px 10px', borderRadius: 6, marginBottom: 6 },
+  originalScoreBox: { background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 6, padding: '6px 10px', marginBottom: 10, flexShrink: 0 },
+  criteriaGroup: { marginBottom: 12 },
+  groupHeader: { display: 'flex', justifyContent: 'space-between', background: '#f8fafc', padding: '6px 10px', borderRadius: 6, marginBottom: 6 },
   groupName: { fontSize: 12, fontWeight: 700, color: '#111827' },
   groupWeight: { fontSize: 11, color: '#6b7280' },
   criteriaRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '5px 4px', borderBottom: '1px solid #f9fafb' },
@@ -742,13 +819,19 @@ const styles = {
   criteriaName: { fontSize: 12, fontWeight: 500, color: '#374151', display: 'block' },
   criteriaDesc: { fontSize: 10, color: '#9ca3af', display: 'block', marginTop: 1 },
   scoreInput: { display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 },
-  scoreField: { width: 50, padding: '3px 6px', borderRadius: 5, border: '1px solid #d1d5db', fontSize: 12, textAlign: 'center', outline: 'none' },
+  scoreField: { width: 48, padding: '3px 6px', borderRadius: 5, border: '1px solid #d1d5db', fontSize: 12, textAlign: 'center', outline: 'none' },
   scoreMax: { fontSize: 11, color: '#6b7280' },
-  groupTotal: { display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '4px 4px 0', alignItems: 'center' },
-  totalBox: { background: '#f0f9ff', borderRadius: 8, padding: '12px 16px', margin: '12px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+  groupTotal: { display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '3px 4px 0', alignItems: 'center' },
+  totalBox: { background: '#f0f9ff', borderRadius: 8, padding: '10px 14px', margin: '10px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 },
   totalScore: { display: 'flex', alignItems: 'baseline', gap: 6 },
-  rankBadge: { padding: '4px 12px', borderRadius: 20, fontSize: 13, fontWeight: 600 },
-  commentBox: { marginTop: 8, display: 'flex', flexDirection: 'column', gap: 5 },
+  rankBadge: { padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600 },
+  commentBox: { marginTop: 8, display: 'flex', flexDirection: 'column', gap: 5, flexShrink: 0 },
   textarea: { padding: '8px 10px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 12, outline: 'none', resize: 'vertical' },
-  scoreActions: { display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 12, paddingTop: 10, borderTop: '1px solid #f3f4f6', flexShrink: 0 },
+  scoreActions: { display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 10, paddingTop: 10, borderTop: '1px solid #f3f4f6', flexShrink: 0 },
+  table: { width: '100%', borderCollapse: 'collapse' },
+  thead: { background: '#f9fafb' },
+  th: { padding: '10px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase' },
+  tr: { borderTop: '1px solid #f3f4f6' },
+  td: { padding: '12px', fontSize: 13, color: '#374151', verticalAlign: 'middle' },
+  smallBtn: { padding: '4px 10px', background: '#eff6ff', color: '#1a56db', border: '1px solid #bfdbfe', borderRadius: 5, fontSize: 11, cursor: 'pointer', fontWeight: 500 },
 }
