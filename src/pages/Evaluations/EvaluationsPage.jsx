@@ -184,14 +184,18 @@ export default function EvaluationsPage() {
   }
 
   const handleSaveEval = async () => {
-    if (!selectedEmployee || !selectedCycle) return
-    setSubmitting(true)
-    const totalScore = calcTotalScore(scores, selectedEmployee)
-    const ranking = RANKING(totalScore)
-    const userId = (await supabase.auth.getUser()).data.user?.id
-    const existing = existingEvals.find(e => e.employee_id === selectedEmployee.id)
+  if (!selectedEmployee || !selectedCycle) return
+  setSubmitting(true)
+  const totalScore = calcTotalScore(scores, selectedEmployee)
+  const ranking = RANKING(totalScore)
+  const userId = (await supabase.auth.getUser()).data.user?.id
+  const existing = existingEvals.find(e => e.employee_id === selectedEmployee.id)
 
-    let payload = {
+  let payload = {}
+
+  if (role === 'manager') {
+    // TBP lưu nháp → status: draft
+    payload = {
       scores,
       total_score: totalScore,
       ranking: ranking.label,
@@ -201,34 +205,58 @@ export default function EvaluationsPage() {
       original_comment: comment,
       evaluator_id: userId,
     }
-
-    if (role === 'hr') {
+  } else if (role === 'hr') {
+    // HR lưu → giữ nguyên status hiện tại (submitted), chỉ lưu hr_scores
+    payload = {
+      hr_scores: scores,
+      hr_comment: comment,
+      total_score: totalScore,
+      ranking: ranking.label,
+      hr_reviewed_by: userId,
+      hr_reviewed_at: new Date().toISOString(),
+      status: existing?.status || 'submitted', // Giữ nguyên status
+    }
+  } else if (role === 'board_manager') {
+    if (selectedEmployee.is_leader) {
+      // BLĐ đánh giá TBP → status: submitted (để sau approve)
       payload = {
-        hr_scores: scores,
-        hr_comment: comment,
+        scores,
         total_score: totalScore,
         ranking: ranking.label,
-        hr_reviewed_by: userId,
-        hr_reviewed_at: new Date().toISOString(),
-        status: existing?.status || 'submitted',
+        comment,
+        status: 'hr_reviewed',
+        original_scores: scores,
+        original_comment: comment,
+        evaluator_id: userId,
+      }
+    } else {
+      // BLĐ sửa điểm NV thường → giữ nguyên hr_reviewed
+      payload = {
+        scores,
+        total_score: totalScore,
+        ranking: ranking.label,
+        comment,
+        status: 'hr_reviewed', // Giữ nguyên để BLĐ có thể approve
+        evaluator_id: userId,
       }
     }
-
-    if (existing) {
-      await supabase.from('evaluations').update(payload).eq('id', existing.id)
-    } else {
-      await supabase.from('evaluations').insert([{
-        cycle_id: selectedCycle.id,
-        employee_id: selectedEmployee.id,
-        ...payload,
-      }])
-    }
-
-    const { data: evals } = await supabase.from('evaluations').select('*').eq('cycle_id', selectedCycle.id)
-    setExistingEvals(evals || [])
-    setSelectedEmployee(null)
-    setSubmitting(false)
   }
+
+  if (existing) {
+    await supabase.from('evaluations').update(payload).eq('id', existing.id)
+  } else {
+    await supabase.from('evaluations').insert([{
+      cycle_id: selectedCycle.id,
+      employee_id: selectedEmployee.id,
+      ...payload,
+    }])
+  }
+
+  const { data: evals } = await supabase.from('evaluations').select('*').eq('cycle_id', selectedCycle.id)
+  setExistingEvals(evals || [])
+  setSelectedEmployee(null)
+  setSubmitting(false)
+}
 
 const handleSubmitAll = async () => {
   if (!confirm('Xác nhận submit toàn bộ đánh giá?')) return

@@ -25,7 +25,45 @@ export default function ImportExcelModal({ onClose, onSuccess }) {
       setError('Không thể đọc file: ' + err.message)
     }
   }
-
+// Hàm parse date từ Excel (xử lý cả số serial và text)
+const parseExcelDate = (val) => {
+  if (!val) return null
+  
+  // Nếu là số (Excel serial date)
+  if (typeof val === 'number') {
+    // Excel serial: ngày 1/1/1900 = 1, có lỗi leap year 1900 nên trừ thêm
+    const date = new Date((val - 25569) * 86400 * 1000)
+    return date.toISOString().split('T')[0] // YYYY-MM-DD
+  }
+  
+  // Nếu là string dạng DD/MM/YYYY
+  if (typeof val === 'string') {
+    // Thử parse DD/MM/YYYY
+    const ddmmyyyy = val.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/)
+    if (ddmmyyyy) {
+      return `${ddmmyyyy[3]}-${ddmmyyyy[2].padStart(2,'0')}-${ddmmyyyy[1].padStart(2,'0')}`
+    }
+    
+    // Thử parse YYYY-MM-DD (đã đúng)
+    const yyyymmdd = val.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/)
+    if (yyyymmdd) {
+      return `${yyyymmdd[1]}-${yyyymmdd[2].padStart(2,'0')}-${yyyymmdd[3].padStart(2,'0')}`
+    }
+    
+    // Thử parse bằng Date constructor
+    const d = new Date(val)
+    if (!isNaN(d.getTime())) {
+      return d.toISOString().split('T')[0]
+    }
+  }
+  
+  // Nếu là Date object
+  if (val instanceof Date) {
+    return val.toISOString().split('T')[0]
+  }
+  
+  return null
+}
 const handleImport = async () => {
   if (rows.length === 0) return
   setLoading(true)
@@ -89,8 +127,8 @@ const handleImport = async () => {
         r['Loại HĐ'] === 'Hợp đồng thời vụ' ? 'thoi_vu' :
         r['Loại HĐ'] === 'Hợp đồng có thời hạn' ? 'co_thoi_han' : 'vo_thoi_han',
       status: r['Trạng thái'] === 'Đã nghỉ' ? 'inactive' : r['Trạng thái'] === 'Thử việc' ? 'probation' : 'active',
-      start_date: r['Ngày vào'] || null,
-      end_date: r['Ngày nghỉ'] || null,
+      start_date: parseExcelDate(r['Ngày vào']),
+      end_date: parseExcelDate(r['Ngày nghỉ']),
       address: String(r['Địa chỉ'] || ''),
       department_id: deptId || null,
     }
