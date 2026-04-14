@@ -71,7 +71,7 @@ export default function EmployeesPage() {
     const { data: salaryData } = await supabase
       .from('salary_records')
       .select('employee_id, base_salary, effective_date')
-      .order('effective_date', { ascending: false })
+      .order('created_at', { ascending: false })
 
     const salaryMap = {}
     salaryData?.forEach(s => {

@@ -16,7 +16,11 @@ export default function AddEmployeeForm({ onSuccess, departments = [] }) {
     team: '', position: '', phone: '', personal_email: '',
     gender: 'male', national_id: '', tax_code: '', bank_account: '',
     bank_name: '', employment_type: 'co_thoi_han', status: 'active',
-    start_date: '', end_date: '', address: '',
+    start_date: '', end_date: '', address: '',   base_salary: '',      // Lương cơ bản
+  hieu_suat: '',        // Hiệu suất
+  chuyen_can: '',       // Chuyên cần
+  doi_song: '',         // Đời sống
+  tich_luy: '',         // Tích lũy
   })
   const [selectedBranchId, setSelectedBranchId] = useState('')
   const [selectedDeptId, setSelectedDeptId] = useState('')
@@ -30,6 +34,12 @@ const handleSubmit = async e => {
   setError('')
 
   const payload = { ...form }
+  // Xóa các trường lương ra khỏi payload employees
+delete payload.base_salary
+delete payload.hieu_suat
+delete payload.chuyen_can
+delete payload.doi_song
+delete payload.tich_luy
   if (!payload.end_date) delete payload.end_date
 // Lưu department_id theo cấp nhỏ nhất đã chọn
 if (selectedDeptId && form.team) {
@@ -54,16 +64,23 @@ if (selectedDeptId && form.team) {
     setLoading(false)
     return
   }
-    // Lưu mức lương hiện tại
-  if (currentSalary && Number(currentSalary) > 0) {
-    await supabase.from('salary_records').insert([{
-      employee_id: newEmployee.id,
-      base_salary: Number(currentSalary),
-      salary_type: 'time_based',
-      effective_date: newEmployee.start_date || new Date().toISOString().split('T')[0],
-      change_reason: 'Lương khởi điểm',
-    }])
-  }
+// Lưu cơ cấu lương mới
+const totalSalary = (Number(form.base_salary) || 0) + (Number(form.hieu_suat) || 0) +
+  (Number(form.chuyen_can) || 0) + (Number(form.doi_song) || 0) + (Number(form.tich_luy) || 0)
+
+if (totalSalary > 0) {
+  await supabase.from('salary_records').insert([{
+    employee_id: newEmployee.id,
+    base_salary: Number(form.base_salary) || 0,
+    hieu_suat: Number(form.hieu_suat) || 0,
+    chuyen_can: Number(form.chuyen_can) || 0,
+    doi_song: Number(form.doi_song) || 0,
+    tich_luy: Number(form.tich_luy) || 0,
+    salary_type: 'time_based',
+    effective_date: newEmployee.start_date || new Date().toISOString().split('T')[0],
+    change_reason: 'Lương khởi điểm',
+  }])
+}
 
   // Tự động tạo tài khoản
   try {
@@ -202,16 +219,34 @@ const teams = departments.filter(d => d.parent_id === selectedDeptId)
             <input style={styles.input} name="address" value={form.address} onChange={handleChange} />
           </Field>
         </div>
-<div style={{ gridColumn: '1 / -1' }}>
-  <Field label="Mức lương hiện tại (VNĐ)">
-    <input
-      style={styles.input}
-      type="number"
-      placeholder="VD: 10000000"
-      value={currentSalary}
-      onChange={e => setCurrentSalary(e.target.value)}
-    />
-  </Field>
+
+{/* Cơ cấu lương */}
+<div style={{ gridColumn: '1 / -1', borderTop: '1px solid #f3f4f6', paddingTop: 16, marginTop: 4 }}>
+  <p style={{ fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 12 }}>💵 Cơ cấu lương (VNĐ)</p>
+  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+    {[
+      { key: 'base_salary', label: 'Lương cơ bản' },
+      { key: 'hieu_suat', label: 'Hiệu suất' },
+      { key: 'chuyen_can', label: 'Chuyên cần' },
+      { key: 'doi_song', label: 'Đời sống' },
+      { key: 'tich_luy', label: 'Tích lũy' },
+    ].map(f => (
+      <div key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+        <label style={{ fontSize: 12, fontWeight: 500, color: '#374151' }}>{f.label}</label>
+        <input style={styles.input} type="number" placeholder="0"
+          value={form[f.key]} onChange={e => setForm({ ...form, [f.key]: e.target.value })} />
+      </div>
+    ))}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+      <label style={{ fontSize: 12, fontWeight: 600, color: '#1a56db' }}>Tổng lương</label>
+      <div style={{ padding: '9px 12px', borderRadius: 7, background: '#eff6ff', fontSize: 14, fontWeight: 700, color: '#1a56db' }}>
+        {new Intl.NumberFormat('vi-VN').format(
+          (Number(form.base_salary) || 0) + (Number(form.hieu_suat) || 0) +
+          (Number(form.chuyen_can) || 0) + (Number(form.doi_song) || 0) + (Number(form.tich_luy) || 0)
+        )} đ
+      </div>
+    </div>
+  </div>
 </div>
       </div>
 

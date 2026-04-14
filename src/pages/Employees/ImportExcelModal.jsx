@@ -105,7 +105,7 @@ const handleImport = async () => {
 
   const employees = rows.map(r => {
     const branchName = String(r['Chi nhánh'] || '')
-    const deptName = String(r['Phòng ban'] || '')
+    const deptName = String(r['Bộ phận'] || '')
     const teamName = String(r['Tổ'] || '')
     const deptId = findDeptId(branchName, deptName, teamName)
 
@@ -147,21 +147,28 @@ const handleImport = async () => {
   }
 
   // Lưu salary_records cho nhân viên có mức lương
-  const salaryRecords = inserted
-    .filter(emp => {
-      const row = rows.find(r => String(r['Mã nhân viên']) === emp.employee_code)
-      return row && Number(row['Mức lương']) > 0
-    })
-    .map(emp => {
-      const row = rows.find(r => String(r['Mã nhân viên']) === emp.employee_code)
-      return {
-        employee_id: emp.id,
-        base_salary: Number(row['Mức lương']),
-        salary_type: 'time_based',
-        effective_date: emp.start_date || new Date().toISOString().split('T')[0],
-        change_reason: 'Lương khởi điểm',
-      }
-    })
+// Trong phần tạo salaryRecords
+const salaryRecords = inserted.map(emp => {
+  const row = rows.find(r => String(r['Mã nhân viên']) === emp.employee_code)
+  const baseSalary = Number(row?.['Lương cơ bản'] || 0)
+  const hieuSuat = Number(row?.['Hiệu suất'] || 0)
+  const chuyenCan = Number(row?.['Chuyên cần'] || 0)
+  const doiSong = Number(row?.['Đời sống'] || 0)
+  const tichLuy = Number(row?.['Tích lũy'] || 0)
+  const total = baseSalary + hieuSuat + chuyenCan + doiSong + tichLuy
+  if (total === 0) return null
+  return {
+    employee_id: emp.id,
+    base_salary: baseSalary,
+    hieu_suat: hieuSuat,
+    chuyen_can: chuyenCan,
+    doi_song: doiSong,
+    tich_luy: tichLuy,
+    salary_type: 'time_based',
+    effective_date: emp.start_date || new Date().toISOString().split('T')[0],
+    change_reason: 'Lương khởi điểm',
+  }
+}).filter(Boolean)
 
   if (salaryRecords.length > 0) {
     await supabase.from('salary_records').insert(salaryRecords)
@@ -209,7 +216,11 @@ const handleImport = async () => {
   'Ngày vào': '2024-01-01',
   'Ngày nghỉ': '',
   'Địa chỉ': '123 Đường ABC, Hà Nội',
-  'Mức lương': 10000000,
+  'Lương cơ bản': 5200000,
+'Hiệu suất': 1000000,
+'Chuyên cần': 800000,
+'Đời sống': 200000,
+'Tích lũy': 350000,
 }]
     const ws = XLSX.utils.json_to_sheet(template)
     const wb = XLSX.utils.book_new()
@@ -217,7 +228,7 @@ const handleImport = async () => {
     XLSX.writeFile(wb, 'mau_import_nhanvien.xlsx')
   }
 
-  const COLUMNS = ['Mã nhân viên', 'Họ tên', 'Chi nhánh', 'Phòng ban', 'Tổ', 'Chức vụ', 'Số điện thoại', 'Email', 'Giới tính', 'CCCD', 'Mã số thuế', 'Số TK', 'Ngân hàng', 'Loại HĐ', 'Trạng thái', 'Ngày vào', 'Ngày nghỉ', 'Địa chỉ', 'Mức lương']
+  const COLUMNS = ['Mã nhân viên', 'Họ tên', 'Chi nhánh', 'Bộ phận', 'Tổ', 'Chức vụ', 'Số điện thoại', 'Email', 'Giới tính', 'CCCD', 'Mã số thuế', 'Số TK', 'Ngân hàng', 'Loại HĐ', 'Trạng thái', 'Ngày vào', 'Ngày nghỉ', 'Địa chỉ', 'Mức lương']
 
   return (
     <div style={styles.overlay} onClick={onClose}>
