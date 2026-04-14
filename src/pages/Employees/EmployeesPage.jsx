@@ -151,6 +151,23 @@ const getFilteredEmployees = () => {
     buildPath(selectedNode.id)
     return parts.join(' › ')
   }
+  // Đếm tổng NV trong node + tất cả node con
+const getTotalEmployeeCount = () => {
+  if (!selectedNode) return 0
+
+  if (selectedNode.id === 'root') {
+    return employees.length
+  }
+
+  // Lấy tất cả ID con cháu
+  const getAllIds = (id) => {
+    const children = departments.filter(d => d.parent_id === id)
+    return [id, ...children.flatMap(c => getAllIds(c.id))]
+  }
+
+  const allIds = getAllIds(selectedNode.id)
+  return employees.filter(emp => emp.department_id && allIds.includes(emp.department_id)).length
+}
 const handleDelete = async (emp) => {
   if (!confirm(`Xóa nhân viên "${emp.full_name}"?\nThao tác này không thể hoàn tác.`)) return
   await supabase.from('employees').delete().eq('id', emp.id)
@@ -181,7 +198,14 @@ const handleDelete = async (emp) => {
         <div style={styles.mainHeader}>
           <div>
             <p style={styles.breadcrumb}>{getBreadcrumb()}</p>
-            <p style={styles.empCount}>{filteredEmployees.length} nhân viên</p>
+            <p style={styles.empCount}>
+  {getTotalEmployeeCount()} nhân viên
+  {getTotalEmployeeCount() !== filteredEmployees.length && (
+    <span style={{ fontSize: 12, fontWeight: 400, color: '#6b7280', marginLeft: 6 }}>
+      ({filteredEmployees.length} trong node này)
+    </span>
+  )}
+</p>
           </div>
           {canEdit && (
             <div style={styles.actions}>
