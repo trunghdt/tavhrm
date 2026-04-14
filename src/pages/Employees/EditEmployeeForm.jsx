@@ -47,6 +47,24 @@ const initBranchId = currentGrandParent?.id || currentParent?.id || ''
 const initDeptId = currentGrandParent ? currentParent?.id || '' : currentDept?.parent_id ? currentDept.id : ''
 const initTeamId = currentGrandParent ? currentDept?.id || '' : ''
 
+const [baseSalary, setBaseSalary] = useState('')
+const [loadingSalary, setLoadingSalary] = useState(false)
+
+// Fetch lương hiện tại khi mở form
+useEffect(() => {
+  const fetchSalary = async () => {
+    const { data } = await supabase
+      .from('salary_records')
+      .select('base_salary')
+      .eq('employee_id', employee.id)
+      .order('effective_date', { ascending: false })
+      .limit(1)
+      .single()
+    if (data) setBaseSalary(data.base_salary)
+  }
+  fetchSalary()
+}, [employee.id])
+
 const [selectedBranchId, setSelectedBranchId] = useState(initBranchId)
 const [selectedDeptId, setSelectedDeptId] = useState(initDeptId)
 
@@ -59,6 +77,28 @@ const handleSubmit = async e => {
   setError('')
   const payload = { ...form }
   if (!payload.end_date) delete payload.end_date
+  // Lưu lương mới nếu có thay đổi
+if (baseSalary) {
+  // Kiểm tra lương hiện tại
+  const { data: currentSalary } = await supabase
+    .from('salary_records')
+    .select('base_salary')
+    .eq('employee_id', employee.id)
+    .order('effective_date', { ascending: false })
+    .limit(1)
+    .single()
+
+  // Chỉ tạo record mới nếu lương thay đổi
+  if (!currentSalary || Number(currentSalary.base_salary) !== Number(baseSalary)) {
+    await supabase.from('salary_records').insert([{
+      employee_id: employee.id,
+      base_salary: Number(baseSalary),
+      salary_type: 'time_based',
+      effective_date: new Date().toISOString().split('T')[0],
+      change_reason: 'Cập nhật thủ công',
+    }])
+  }
+}
   
   // Lưu department_id theo cấp nhỏ nhất đã chọn
   if (selectedDeptId && form.team) {
@@ -199,7 +239,16 @@ const teams = departments.filter(d => d.parent_id === selectedDeptId)
       </div>
 
       {error && <p style={styles.error}>{error}</p>}
-
+<div style={styles.field}>
+  <label style={styles.label}>Mức lương hiện tại (VNĐ)</label>
+  <input
+    style={styles.input}
+    type="number"
+    placeholder="VD: 8000000"
+    value={baseSalary}
+    onChange={e => setBaseSalary(e.target.value)}
+  />
+</div>
       <div style={styles.actions}>
         <button type="button" style={styles.cancelBtn} onClick={onClose}>Hủy</button>
         <button type="submit" style={styles.submitBtn} disabled={loading}>

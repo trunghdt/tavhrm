@@ -30,6 +30,18 @@ export default function EmployeesPage() {
   const [showDeptManager, setShowDeptManager] = useState(false)
   const [departmentRoles, setDepartmentRoles] = useState([])
   const [showRoleAssign, setShowRoleAssign] = useState(false)
+  const [activeTab, setActiveTab] = useState('info')
+  const [empEvals, setEmpEvals] = useState([])
+
+  const fetchEmployeeEvals = async (employeeId) => {
+   const { data } = await supabase
+    .from('evaluations')
+    .select('*, evaluation_cycles(title, period)')
+    .eq('employee_id', employeeId)
+    .eq('status', 'approved')
+    .order('created_at', { ascending: false })
+   setEmpEvals(data || [])
+  }
   const [assignEmployee, setAssignEmployee] = useState(null)
 
   useEffect(() => {
@@ -290,59 +302,174 @@ return <span style={{ fontSize: 13, color: '#374151' }}>{emp.position || '—'}<
 
       {/* Modal Xem chi tiết */}
       {selected && (
-        <div style={styles.overlay} onClick={() => setSelected(null)}>
-          <div style={styles.modal} onClick={e => e.stopPropagation()}>
-            <div style={styles.modalHeader}>
-              {selected.avatar_url ? (
-                <img src={selected.avatar_url} alt="avatar" style={{ width: 56, height: 56, borderRadius: '50%', objectFit: 'cover' }} />
-              ) : (
-                <div style={styles.modalAvatar}>{selected.full_name?.[0]}</div>
-              )}
-              <div>
-                <h2 style={styles.modalName}>{selected.full_name}</h2>
-                <p style={styles.modalPos}>{selected.position} — {selected.departments?.name || '—'}</p>
-              </div>
-              <button style={styles.closeBtn} onClick={() => setSelected(null)}>✕</button>
-            </div>
-            <div style={styles.modalBody}>
-              <div style={styles.infoGrid}>
-                {[
-                  ['Mã nhân viên', selected.employee_code],
-                  ['Họ và tên', selected.full_name],
-                  ['Chi nhánh', selected.branch],
-                  ['Bộ phận', selected.departments?.name],
-                  ['Tổ', selected.team],
-                  ['Chức vụ', selected.position],
-                  ['Số điện thoại', selected.phone],
-                  ['Email', selected.personal_email],
-                  ['Giới tính', selected.gender === 'male' ? 'Nam' : selected.gender === 'female' ? 'Nữ' : '—'],
-                  ['Ngày sinh', selected.date_of_birth ? new Date(selected.date_of_birth).toLocaleDateString('vi-VN') : '—'],
-                  ['CCCD', selected.national_id],
-                  ['Mã số thuế', selected.tax_code],
-                  ['Số tài khoản', selected.bank_account],
-                  ['Ngân hàng', selected.bank_name],
-                  ['Loại hợp đồng',
-                    selected.employment_type === 'thu_viec' ? 'Hợp đồng thử việc' :
-                      selected.employment_type === 'thoi_vu' ? 'Hợp đồng thời vụ' :
-                        selected.employment_type === 'co_thoi_han' ? 'Hợp đồng có thời hạn' :
-                          selected.employment_type === 'vo_thoi_han' ? 'Hợp đồng vô thời hạn' : '—'
-                  ],
-                  ['Trạng thái', STATUS_LABELS[selected.status] || '—'],
-                  ['Ngày vào làm', selected.start_date ? new Date(selected.start_date).toLocaleDateString('vi-VN') : '—'],
-                  ['Ngày nghỉ việc', selected.end_date ? new Date(selected.end_date).toLocaleDateString('vi-VN') : '—'],
-                  ['Mức lương hiện tại', salaries[selected.id] ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(salaries[selected.id]) : '—'],
-                  ['Địa chỉ', selected.address],
-                ].map(([label, value]) => (
-                  <div key={label} style={styles.infoItem}>
-                    <span style={styles.infoLabel}>{label}</span>
-                    <span style={styles.infoValue}>{value || '—'}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+  <div style={styles.overlay} onClick={() => { setSelected(null); setActiveTab('info'); setEmpEvals([]) }}>
+    <div style={{ ...styles.modal, width: 680 }} onClick={e => e.stopPropagation()}>
+      {/* Header */}
+      <div style={styles.modalHeader}>
+        {selected.avatar_url ? (
+          <img src={selected.avatar_url} alt="avatar" style={{ width: 52, height: 52, borderRadius: '50%', objectFit: 'cover' }} />
+        ) : (
+          <div style={styles.modalAvatar}>{selected.full_name?.[0]}</div>
+        )}
+        <div style={{ flex: 1 }}>
+          <h2 style={styles.modalName}>{selected.full_name}</h2>
+          <p style={styles.modalPos}>{selected.position || 'Nhân viên'} — {selected.departments?.name || '—'}</p>
         </div>
-      )}
+        <button style={styles.closeBtn} onClick={() => { setSelected(null); setActiveTab('info'); setEmpEvals([]) }}>✕</button>
+      </div>
+
+      {/* Tab bar */}
+      <div style={styles.tabBar}>
+{[
+  { key: 'info', label: '👤 Thông tin' },
+  ...(role !== 'manager' ? [
+    { key: 'evaluations', label: '⭐ Đánh giá' },
+    { key: 'salary', label: '💰 Tăng lương' },
+  ] : []),
+].map(tab => (
+          <button key={tab.key}
+            style={{
+              ...styles.tabBtn,
+              borderBottom: activeTab === tab.key ? '2px solid #1a56db' : '2px solid transparent',
+              color: activeTab === tab.key ? '#1a56db' : '#6b7280',
+              fontWeight: activeTab === tab.key ? 700 : 400,
+            }}
+            onClick={() => {
+              setActiveTab(tab.key)
+              if (tab.key === 'evaluations') fetchEmployeeEvals(selected.id)
+            }}>
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab content */}
+      <div style={styles.modalBody}>
+        {/* Tab Thông tin */}
+        {activeTab === 'info' && (
+          <div style={styles.infoGrid}>
+            {[
+              ['Mã nhân viên', selected.employee_code],
+              ['Họ và tên', selected.full_name],
+              ['Chi nhánh', selected.branch],
+              ['Bộ phận', selected.departments?.name],
+              ['Tổ', selected.team],
+              ['Chức vụ', selected.position],
+              ['Số điện thoại', selected.phone],
+              ['Email', selected.personal_email],
+              ['Giới tính', selected.gender === 'male' ? 'Nam' : selected.gender === 'female' ? 'Nữ' : '—'],
+              ['Ngày sinh', selected.date_of_birth ? new Date(selected.date_of_birth).toLocaleDateString('vi-VN') : '—'],
+              ['CCCD', selected.national_id],
+              ['Mã số thuế', selected.tax_code],
+              ['Số tài khoản', selected.bank_account],
+              ['Ngân hàng', selected.bank_name],
+              ['Loại hợp đồng',
+                selected.employment_type === 'thu_viec' ? 'Hợp đồng thử việc' :
+                selected.employment_type === 'thoi_vu' ? 'Hợp đồng thời vụ' :
+                selected.employment_type === 'co_thoi_han' ? 'Hợp đồng có thời hạn' :
+                selected.employment_type === 'vo_thoi_han' ? 'Hợp đồng vô thời hạn' : '—'
+              ],
+              ['Trạng thái', selected.status === 'active' ? 'Đang làm việc' : selected.status === 'inactive' ? 'Đã nghỉ' : 'Thử việc'],
+              ['Ngày vào làm', selected.start_date ? new Date(selected.start_date).toLocaleDateString('vi-VN') : '—'],
+              ['Ngày nghỉ việc', selected.end_date ? new Date(selected.end_date).toLocaleDateString('vi-VN') : '—'],
+              ['Địa chỉ', selected.address],
+            ].map(([label, value]) => (
+              <div key={label} style={styles.infoItem}>
+                <span style={styles.infoLabel}>{label}</span>
+                <span style={styles.infoValue}>{value || '—'}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Tab Đánh giá */}
+        {activeTab === 'evaluations' && (
+          <div>
+            {empEvals.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '48px 0', color: '#9ca3af' }}>
+                <p style={{ fontSize: 36, marginBottom: 12 }}>⭐</p>
+                <p style={{ fontSize: 14, fontWeight: 600 }}>Chưa có kết quả đánh giá nào</p>
+                <p style={{ fontSize: 12, marginTop: 4 }}>Kết quả sẽ hiển thị sau khi được Ban lãnh đạo phê duyệt</p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {empEvals.map(ev => {
+                  const score = ev.total_score || 0
+                  const rankColor = score >= 90 ? '#d97706' : score >= 80 ? '#1a56db' : score >= 70 ? '#7c3aed' : score >= 65 ? '#16a34a' : '#dc2626'
+                  return (
+                    <div key={ev.id} style={{ background: '#f9fafb', borderRadius: 10, padding: 16, border: '1px solid #f3f4f6' }}>
+                      {/* Header card */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+                        <div>
+                          <p style={{ fontSize: 14, fontWeight: 700, color: '#111827', marginBottom: 3 }}>
+                            {ev.evaluation_cycles?.title || '—'}
+                          </p>
+                          <p style={{ fontSize: 12, color: '#6b7280' }}>Kỳ: {ev.evaluation_cycles?.period || '—'}</p>
+                          <p style={{ fontSize: 12, color: '#6b7280' }}>
+                            Phê duyệt: {ev.approved_at ? new Date(ev.approved_at).toLocaleDateString('vi-VN') : '—'}
+                          </p>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, justifyContent: 'flex-end' }}>
+                            <span style={{ fontSize: 32, fontWeight: 800, color: rankColor }}>{score}</span>
+                            <span style={{ fontSize: 13, color: '#6b7280' }}>/100</span>
+                          </div>
+                          <span style={{ fontSize: 12, padding: '2px 10px', borderRadius: 10, fontWeight: 600, background: rankColor + '15', color: rankColor }}>
+                            {ev.ranking || '—'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Điểm từng tiêu chí */}
+                      {ev.scores && Object.keys(ev.scores).length > 0 && (
+                        <div style={{ marginBottom: 10 }}>
+                          <p style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', marginBottom: 8 }}>Chi tiết điểm</p>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                            {Object.entries(ev.scores).map(([name, score]) => (
+                              <div key={name} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 10px', background: '#fff', borderRadius: 6, fontSize: 12 }}>
+                                <span style={{ color: '#374151' }}>{name}</span>
+                                <span style={{ fontWeight: 600, color: '#1a56db' }}>{score}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Nhận xét */}
+                      {ev.comment && (
+                        <div style={{ background: '#fff', borderRadius: 6, padding: '8px 12px', marginBottom: 8 }}>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>Nhận xét: </span>
+                          <span style={{ fontSize: 12, color: '#6b7280' }}>{ev.comment}</span>
+                        </div>
+                      )}
+
+                      {/* HR điều chỉnh */}
+                      {ev.hr_scores && (
+                        <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 6, padding: '8px 12px', fontSize: 12 }}>
+                          <p style={{ fontWeight: 600, color: '#d97706', marginBottom: 4 }}>✏️ HR đã điều chỉnh điểm</p>
+                          {ev.hr_comment && <p style={{ color: '#92400e' }}>{ev.hr_comment}</p>}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab Tăng lương */}
+        {activeTab === 'salary' && (
+          <div style={{ textAlign: 'center', padding: '48px 0', color: '#9ca3af' }}>
+            <p style={{ fontSize: 36, marginBottom: 12 }}>💰</p>
+            <p style={{ fontSize: 14, fontWeight: 600 }}>Module đang phát triển</p>
+            <p style={{ fontSize: 12, marginTop: 4 }}>Lịch sử tăng lương sẽ hiển thị ở đây</p>
+          </div>
+        )}
+      </div>
+    </div>
+  </div>
+)}
 
       {/* Modal Sửa */}
       {editEmployee && (
@@ -435,4 +562,6 @@ const styles = {
   infoLabel: { fontSize: 11, color: '#6b7280', fontWeight: 600, textTransform: 'uppercase' },
   infoValue: { fontSize: 13, color: '#111827', fontWeight: 500 },
   roleBtn: { padding: '8px 14px', background: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe', borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: 'pointer' },
+  tabBar: { display: 'flex', borderBottom: '1px solid #f3f4f6', padding: '0 24px', background: '#fff', flexShrink: 0 },
+ tabBtn: { padding: '12px 16px', background: 'none', border: 'none', fontSize: 13, cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap' },
 }
