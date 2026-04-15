@@ -32,6 +32,7 @@ export default function EmployeesPage() {
   const [showRoleAssign, setShowRoleAssign] = useState(false)
   const [activeTab, setActiveTab] = useState('info')
   const [empEvals, setEmpEvals] = useState([])
+  const [zoomAvatar, setZoomAvatar] = useState(null)
   const [empSalaryHistory, setEmpSalaryHistory] = useState([])
 
 const fetchEmployeeSalary = async (employeeId) => {
@@ -340,11 +341,13 @@ return <span style={{ fontSize: 13, color: '#374151' }}>{emp.position || '—'}<
     <div style={{ ...styles.modal, width: 680 }} onClick={e => e.stopPropagation()}>
       {/* Header */}
       <div style={styles.modalHeader}>
-        {selected.avatar_url ? (
-          <img src={selected.avatar_url} alt="avatar" style={{ width: 52, height: 52, borderRadius: '50%', objectFit: 'cover' }} />
-        ) : (
-          <div style={styles.modalAvatar}>{selected.full_name?.[0]}</div>
-        )}
+{selected.avatar_url ? (
+  <img src={selected.avatar_url} alt="avatar"
+    style={{ width: 52, height: 52, borderRadius: '50%', objectFit: 'cover', cursor: 'zoom-in' }}
+    onClick={() => setZoomAvatar(selected.avatar_url)} />
+) : (
+  <div style={styles.modalAvatar}>{selected.full_name?.[0]}</div>
+)}
         <div style={{ flex: 1 }}>
           <h2 style={styles.modalName}>{selected.full_name}</h2>
           <p style={styles.modalPos}>{selected.position || 'Nhân viên'} — {selected.departments?.name || '—'}</p>
@@ -612,6 +615,22 @@ onClick={() => {
     onClose={() => setAssignEmployee(null)}
     onRefresh={fetchEmployees}
   />
+)}
+{/* Modal zoom avatar */}
+{zoomAvatar && (
+  <div style={{
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    zIndex: 300, cursor: 'zoom-out'
+  }} onClick={() => setZoomAvatar(null)}>
+    <img src={zoomAvatar} alt="avatar"
+      style={{ maxWidth: '80vw', maxHeight: '80vh', borderRadius: 12, objectFit: 'contain', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }} />
+    <button style={{
+      position: 'absolute', top: 20, right: 20,
+      background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff',
+      fontSize: 24, width: 40, height: 40, borderRadius: '50%', cursor: 'pointer'
+    }} onClick={() => setZoomAvatar(null)}>✕</button>
+  </div>
 )}
 </div>
   )

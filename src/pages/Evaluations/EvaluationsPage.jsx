@@ -583,12 +583,13 @@ const handleSubmitAll = async () => {
   {cycle.status === 'open' && (
     <>
       <button style={styles.evalBtn} onClick={() => handleOpenEvaluate(cycle)}>📝 Đánh giá</button>
-      <button style={{ ...styles.evalBtn, background: '#f0f9ff', color: '#0369a1', border: '1px solid #7dd3fc' }}
-        onClick={async () => { await handleOpenEvaluate(cycle); setShowSummary(true) }}>
-        📊 Tổng hợp
-      </button>
     </>
   )}
+  {/* Nút tổng hợp hiện với tất cả trạng thái */}
+  <button style={{ ...styles.evalBtn, background: '#f0f9ff', color: '#0369a1', border: '1px solid #7dd3fc' }}
+    onClick={async () => { await handleOpenEvaluate(cycle); setShowSummary(true) }}>
+    📊 Tổng hợp
+  </button>
   <button style={styles.viewBtn} onClick={() => setSelected(cycle)}>Chi tiết →</button>
   {role === 'board_manager' && (
     <button style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: 13, cursor: 'pointer', padding: 0 }}
@@ -597,9 +598,7 @@ const handleSubmitAll = async () => {
         await supabase.from('evaluations').delete().eq('cycle_id', cycle.id)
         await supabase.from('evaluation_cycles').delete().eq('id', cycle.id)
         fetchAll()
-      }}>
-      🗑️ Xóa
-    </button>
+      }}>🗑️ Xóa</button>
   )}
 </div>
               </div>
