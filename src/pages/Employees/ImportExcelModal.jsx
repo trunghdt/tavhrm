@@ -175,22 +175,27 @@ const salaryRecords = inserted.map(emp => {
   }
 
   // Tạo tài khoản cho từng nhân viên
-  for (const emp of inserted) {
-    try {
-      await fetch('/api/create-user', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: `${emp.employee_code.toLowerCase()}@tavhrm.internal`,
-          password: 'tav@12345',
-          role: 'employee',
-          employeeId: emp.id,
-        }),
-      })
-    } catch (err) {
-      console.log('Lỗi tạo tài khoản:', emp.employee_code)
+for (const emp of inserted) {
+  try {
+    const res = await fetch('/api/create-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: `${emp.employee_code.toLowerCase()}@tavhrm.internal`,
+        password: 'tav@12345',
+        role: 'employee',
+        employeeId: emp.id,
+      }),
+    })
+    const resData = await res.json()
+    // Cập nhật user_id vào employees
+    if (resData?.userId) {
+      await supabase.from('employees').update({ user_id: resData.userId }).eq('id', emp.id)
     }
+  } catch (err) {
+    console.log('Tạo tài khoản lỗi:', err)
   }
+}
 
   setDone(true)
   setLoading(false)

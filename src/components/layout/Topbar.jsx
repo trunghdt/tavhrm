@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import ChangePasswordPage from '../../pages/Auth/ChangePasswordPage'
+import { useAuthStore } from '../../store/authStore'
 
 export default function Topbar({ title, user }) {
   const [showChange, setShowChange] = useState(false)
+  const { profile } = useAuthStore()
 
   return (
     <>
@@ -26,7 +28,7 @@ export default function Topbar({ title, user }) {
           <div style={styles.avatar}>
             {user?.email?.[0]?.toUpperCase() || 'U'}
           </div>
-          <span style={styles.email}>{user?.email}</span>
+          <span style={styles.email}>{profile?.full_name || user?.email}</span>
         </div>
       </div>
 
