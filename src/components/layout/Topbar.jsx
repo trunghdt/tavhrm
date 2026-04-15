@@ -7,7 +7,14 @@ export default function Topbar({ title, user }) {
   return (
     <>
       <div style={styles.topbar}>
-        <h1 style={styles.title}>{title}</h1>
+<div style={{ lineHeight: 1.4 }}>
+  <div style={{ fontSize: 13, fontWeight: 700, color: '#1100ff' }}>
+    CÔNG TY CỔ PHẦN CÔNG NGHỆ TASK APPAREL VIỆT NAM
+  </div>
+  <div style={{ fontSize: 12, fontWeight: 500, color: '#040505' }}>
+    HỆ THỐNG THÔNG TIN NHÂN VIÊN
+  </div>
+</div>
         <div style={styles.userInfo}>
           <button
             style={styles.changePwBtn}
