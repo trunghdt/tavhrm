@@ -32,6 +32,16 @@ export default function EmployeesPage() {
   const [showRoleAssign, setShowRoleAssign] = useState(false)
   const [activeTab, setActiveTab] = useState('info')
   const [empEvals, setEmpEvals] = useState([])
+  const [empSalaryHistory, setEmpSalaryHistory] = useState([])
+
+const fetchEmployeeSalary = async (employeeId) => {
+  const { data } = await supabase
+    .from('salary_records')
+    .select('*')
+    .eq('employee_id', employeeId)
+    .order('effective_date', { ascending: false })
+  setEmpSalaryHistory(data || [])
+}
 
   const fetchEmployeeEvals = async (employeeId) => {
    const { data } = await supabase
@@ -358,10 +368,11 @@ return <span style={{ fontSize: 13, color: '#374151' }}>{emp.position || '—'}<
               color: activeTab === tab.key ? '#1a56db' : '#6b7280',
               fontWeight: activeTab === tab.key ? 700 : 400,
             }}
-            onClick={() => {
-              setActiveTab(tab.key)
-              if (tab.key === 'evaluations') fetchEmployeeEvals(selected.id)
-            }}>
+onClick={() => {
+  setActiveTab(tab.key)
+  if (tab.key === 'evaluations') fetchEmployeeEvals(selected.id)
+  if (tab.key === 'salary') fetchEmployeeSalary(selected.id)
+}}>
             {tab.label}
           </button>
         ))}
@@ -482,14 +493,77 @@ return <span style={{ fontSize: 13, color: '#374151' }}>{emp.position || '—'}<
           </div>
         )}
 
-        {/* Tab Tăng lương */}
-        {activeTab === 'salary' && (
-          <div style={{ textAlign: 'center', padding: '48px 0', color: '#9ca3af' }}>
-            <p style={{ fontSize: 36, marginBottom: 12 }}>💰</p>
-            <p style={{ fontSize: 14, fontWeight: 600 }}>Module đang phát triển</p>
-            <p style={{ fontSize: 12, marginTop: 4 }}>Lịch sử tăng lương sẽ hiển thị ở đây</p>
-          </div>
-        )}
+{activeTab === 'salary' && (
+  <div>
+    {empSalaryHistory.length === 0 ? (
+      <div style={{ textAlign: 'center', padding: '48px 0', color: '#9ca3af' }}>
+        <p style={{ fontSize: 36, marginBottom: 12 }}>💰</p>
+        <p style={{ fontSize: 14, fontWeight: 600 }}>Chưa có lịch sử tăng lương</p>
+        <p style={{ fontSize: 12, marginTop: 4 }}>Lịch sử sẽ hiển thị sau khi được phê duyệt</p>
+      </div>
+    ) : (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {empSalaryHistory.map((record, idx) => {
+          const total = (record.base_salary || 0) + (record.hieu_suat || 0) +
+            (record.chuyen_can || 0) + (record.doi_song || 0) + (record.tich_luy || 0)
+          const prevRecord = empSalaryHistory[idx + 1]
+          const prevTotal = prevRecord ? (prevRecord.base_salary || 0) + (prevRecord.hieu_suat || 0) +
+            (prevRecord.chuyen_can || 0) + (prevRecord.doi_song || 0) + (prevRecord.tich_luy || 0) : null
+          const diff = prevTotal !== null ? total - prevTotal : null
+          return (
+            <div key={record.id} style={{ background: '#f9fafb', borderRadius: 10, padding: 16, border: '1px solid #f3f4f6' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                <div>
+                  <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 2 }}>
+                    Hiệu lực từ: <strong style={{ color: '#111827' }}>
+                      {new Date(record.effective_date).toLocaleDateString('vi-VN')}
+                    </strong>
+                  </p>
+                  {record.change_reason && (
+                    <p style={{ fontSize: 12, color: '#6b7280' }}>{record.change_reason}</p>
+                  )}
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: '#111827' }}>
+                    {new Intl.NumberFormat('vi-VN').format(total)} đ
+                  </div>
+                  {diff !== null && diff !== 0 && (
+                    <span style={{ fontSize: 12, color: diff > 0 ? '#16a34a' : '#dc2626', fontWeight: 600 }}>
+                      {diff > 0 ? '▲' : '▼'} {new Intl.NumberFormat('vi-VN').format(Math.abs(diff))} đ
+                    </span>
+                  )}
+                  {idx === 0 && (
+                    <span style={{ fontSize: 11, background: '#f0fdf4', color: '#16a34a', padding: '2px 8px', borderRadius: 10, display: 'block', marginTop: 4 }}>
+                      Hiện tại
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Cơ cấu lương */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                {[
+                  { label: 'Lương cơ bản', value: record.base_salary },
+                  { label: 'Hiệu suất', value: record.hieu_suat },
+                  { label: 'Chuyên cần', value: record.chuyen_can },
+                  { label: 'Đời sống', value: record.doi_song },
+                  { label: 'Tích lũy', value: record.tich_luy },
+                ].map(f => (
+                  <div key={f.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 8px', background: '#fff', borderRadius: 6, fontSize: 12 }}>
+                    <span style={{ color: '#6b7280' }}>{f.label}</span>
+                    <span style={{ fontWeight: 600, color: '#374151' }}>
+                      {new Intl.NumberFormat('vi-VN').format(f.value || 0)} đ
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    )}
+  </div>
+)}
       </div>
     </div>
   </div>
