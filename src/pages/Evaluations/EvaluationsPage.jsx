@@ -579,18 +579,29 @@ const handleSubmitAll = async () => {
                   <div style={styles.infoRow}><span style={styles.infoLabel}>Deadline</span><span style={styles.infoValue}>{cycle.deadline ? new Date(cycle.deadline).toLocaleDateString('vi-VN') : '—'}</span></div>
                   <div style={styles.infoRow}><span style={styles.infoLabel}>Bộ phận</span><span style={styles.infoValue}>{cycle.scope?.dept_assignments?.length || 0} bộ phận</span></div>
                 </div>
-                <div style={styles.cardFooter}>
-                  {cycle.status === 'open' && (
-                    <>
-                      <button style={styles.evalBtn} onClick={() => handleOpenEvaluate(cycle)}>📝 Đánh giá</button>
-                      <button style={{ ...styles.evalBtn, background: '#f0f9ff', color: '#0369a1', border: '1px solid #7dd3fc' }}
-                        onClick={async () => { await handleOpenEvaluate(cycle); setShowSummary(true) }}>
-                        📊 Tổng hợp
-                      </button>
-                    </>
-                  )}
-                  <button style={styles.viewBtn} onClick={() => setSelected(cycle)}>Chi tiết →</button>
-                </div>
+<div style={styles.cardFooter}>
+  {cycle.status === 'open' && (
+    <>
+      <button style={styles.evalBtn} onClick={() => handleOpenEvaluate(cycle)}>📝 Đánh giá</button>
+      <button style={{ ...styles.evalBtn, background: '#f0f9ff', color: '#0369a1', border: '1px solid #7dd3fc' }}
+        onClick={async () => { await handleOpenEvaluate(cycle); setShowSummary(true) }}>
+        📊 Tổng hợp
+      </button>
+    </>
+  )}
+  <button style={styles.viewBtn} onClick={() => setSelected(cycle)}>Chi tiết →</button>
+  {role === 'board_manager' && (
+    <button style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: 13, cursor: 'pointer', padding: 0 }}
+      onClick={async () => {
+        if (!confirm(`Xóa kỳ đánh giá "${cycle.title}"?\nTất cả dữ liệu đánh giá liên quan sẽ bị xóa!`)) return
+        await supabase.from('evaluations').delete().eq('cycle_id', cycle.id)
+        await supabase.from('evaluation_cycles').delete().eq('id', cycle.id)
+        fetchAll()
+      }}>
+      🗑️ Xóa
+    </button>
+  )}
+</div>
               </div>
             ))}
           </div>

@@ -604,16 +604,29 @@ if (role === 'board_manager') {
                   <div style={styles.infoRow}><span style={styles.infoLabel}>Bộ phận</span><span style={styles.infoValue}>{cycle.scope?.dept_assignments?.length || 0} bộ phận</span></div>
                   {cycle.effective_date && <div style={styles.infoRow}><span style={styles.infoLabel}>Ngày hiệu lực</span><span style={styles.infoValue}>{new Date(cycle.effective_date).toLocaleDateString('vi-VN')}</span></div>}
                 </div>
-                <div style={styles.cardFooter}>
-                  {cycle.status === 'open' && (
-                    <>
-                      <button style={styles.evalBtn} onClick={() => handleOpenPropose(cycle)}>💰 Đề xuất</button>
-                      <button style={{ ...styles.evalBtn, background: '#f0f9ff', color: '#0369a1', border: '1px solid #7dd3fc' }}
-                        onClick={async () => { await handleOpenPropose(cycle); setShowSummary(true) }}>📊 Tổng hợp</button>
-                    </>
-                  )}
-                  <button style={styles.viewBtn} onClick={() => setSelected(cycle)}>Chi tiết →</button>
-                </div>
+<div style={styles.cardFooter}>
+  {cycle.status === 'open' && (
+    <>
+      <button style={styles.evalBtn} onClick={() => handleOpenPropose(cycle)}>💰 Đề xuất</button>
+      <button style={{ ...styles.evalBtn, background: '#f0f9ff', color: '#0369a1', border: '1px solid #7dd3fc' }}
+        onClick={async () => { await handleOpenPropose(cycle); setShowSummary(true) }}>
+        📊 Tổng hợp
+      </button>
+    </>
+  )}
+  <button style={styles.viewBtn} onClick={() => setSelected(cycle)}>Chi tiết →</button>
+  {role === 'board_manager' && (
+    <button style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: 13, cursor: 'pointer', padding: 0 }}
+      onClick={async () => {
+        if (!confirm(`Xóa đợt tăng lương "${cycle.title}"?\nTất cả đề xuất liên quan sẽ bị xóa!`)) return
+        await supabase.from('salary_proposals').delete().eq('cycle_id', cycle.id)
+        await supabase.from('salary_review_cycles').delete().eq('id', cycle.id)
+        fetchAll()
+      }}>
+      🗑️ Xóa
+    </button>
+  )}
+</div>
               </div>
             ))}
           </div>
