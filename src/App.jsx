@@ -10,14 +10,20 @@ import EvaluationsPage from './pages/Evaluations/EvaluationsPage'
 import SalaryReviewPage from './pages/SalaryReview/SalaryReviewPage'
 import PermissionsPage from './pages/Permissions/PermissionsPage'
 import ChangePasswordPage from './pages/Auth/ChangePasswordPage'
+import MyProfilePage from "./pages/Employees/MyProfilePage"
+import MyEvaluationsPage from "./pages/Employees/MyEvaluationsPage"
+import MySalaryPage from "./pages/Employees/MySalaryPage"
 
 function App() {
   const [user, setUser] = useState(undefined)
   const { fetchProfile, role } = useAuthStore()
 
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
+      // Check nếu email dạng @tavhrm.internal thì yêu cầu đổi mật khẩu
+
       if (session?.user) fetchProfile(session.user.id)
     })
 
@@ -40,6 +46,7 @@ function App() {
 
   return (
     <BrowserRouter>
+
       <Routes>
         <Route path="/login" element={!user ? <LoginPage /> : <Navigate to="/" />} />
         <Route element={user ? <AppLayout user={user} /> : <Navigate to="/login" />}>
@@ -48,6 +55,9 @@ function App() {
           <Route path="/evaluations" element={<EvaluationsPage />} />
           <Route path="/salary-review" element={<SalaryReviewPage />} />
           <Route path="/permissions" element={<PermissionsPage />} />
+          <Route path="/my-profile" element={<MyProfilePage />} />
+          <Route path="/my-evaluations" element={<MyEvaluationsPage />} />
+          <Route path="/my-salary" element={<MySalaryPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

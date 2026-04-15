@@ -18,9 +18,12 @@ export default function ChangePasswordPage({ onSuccess, forced = false }) {
     }
     setLoading(true)
     setError('')
-    const { error } = await supabase.auth.updateUser({ password: form.newPassword })
-    if (error) setError(error.message)
-    else onSuccess()
+const { error } = await supabase.auth.updateUser({ 
+  password: form.newPassword,
+  data: { password_changed: true } // ← thêm dòng này
+})
+if (error) setError(error.message)
+else onSuccess()
     setLoading(false)
   }
 

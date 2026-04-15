@@ -7,13 +7,18 @@ export default function Sidebar() {
   const location = useLocation()
   const { role } = useAuthStore()
 
-  const allMenuItems = [
-    { path: '/', icon: '📊', label: 'Dashboard', roles: ['board_manager', 'hr', 'manager', 'employee'] },
-    { path: '/employees', icon: '👥', label: 'Nhân viên', roles: ['board_manager', 'hr', 'manager'] },
-    { path: '/evaluations', icon: '⭐', label: 'Đánh giá', roles: ['board_manager', 'hr', 'manager'] },
-    { path: '/salary-review', icon: '💰', label: 'Tăng lương', roles: ['board_manager', 'hr', 'manager'] },
-    { path: '/permissions', icon: '🔐', label: 'Phân quyền', roles: ['board_manager'] },
-  ]
+
+const allMenuItems = [
+  { path: '/', icon: '📊', label: 'Dashboard', roles: ['board_manager', 'hr', 'manager'] },
+  { path: '/employees', icon: '👥', label: 'Nhân viên', roles: ['board_manager', 'hr', 'manager'] },
+  { path: '/evaluations', icon: '⭐', label: 'Đánh giá', roles: ['board_manager', 'hr', 'manager'] },
+  { path: '/salary-review', icon: '💰', label: 'Tăng lương', roles: ['board_manager', 'hr', 'manager'] },
+  { path: '/permissions', icon: '🔐', label: 'Phân quyền', roles: ['board_manager'] },
+  // Menu riêng cho nhân viên
+  { path: '/my-profile', icon: '👤', label: 'Thông tin cá nhân', roles: ['employee', 'manager'] },
+  { path: '/my-evaluations', icon: '⭐', label: 'Lịch sử đánh giá', roles: ['employee', 'manager'] },
+  { path: '/my-salary', icon: '💰', label: 'Thông tin lương', roles: ['employee', 'manager'] },
+]
 
   const menuItems = allMenuItems.filter(item => item.roles.includes(role))
 
