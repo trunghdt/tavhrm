@@ -55,6 +55,7 @@ export default function SalaryReviewPage() {
   const [approveEffectiveDate, setApproveEffectiveDate] = useState('')
   const [approvingAll, setApprovingAll] = useState(false)
   const [selected, setSelected] = useState(null)
+  const [myDeptIds, setMyDeptIds] = useState([])
 
   useEffect(() => { fetchAll() }, [])
 
@@ -89,7 +90,31 @@ export default function SalaryReviewPage() {
         }
       }
     })
-    setSalaryMap(sMap)
+setSalaryMap(sMap)
+
+    // Xác định BP mà TBP hiện tại là leader
+    if (role === 'manager') {
+      const { data: { user } } = await supabase.auth.getUser()
+      const { data: myEmp } = await supabase
+        .from('employees')
+        .select('id')
+        .eq('user_id', user.id)
+        .single()
+      if (myEmp) {
+        const myRoles = (rolesData || []).filter(r => r.employee_id === myEmp.id && r.role_type === 'leader')
+        const myDirectDeptIds = myRoles.map(r => r.department_id)
+        const getDescendantIds = (depts, parentId) => {
+          const children = depts.filter(d => d.parent_id === parentId)
+          return [...children.map(c => c.id), ...children.flatMap(c => getDescendantIds(depts, c.id))]
+        }
+        const allMyDeptIds = [
+          ...myDirectDeptIds,
+          ...myDirectDeptIds.flatMap(id => getDescendantIds(deptsData || [], id))
+        ]
+        setMyDeptIds(allMyDeptIds)
+      }
+    }
+
     setLoading(false)
   }
 
@@ -392,9 +417,9 @@ if (role === 'board_manager') {
     setApprovingAll(false)
   }
 
-  const visibleEmployees = cycleEmployees.filter(emp => {
+const visibleEmployees = cycleEmployees.filter(emp => {
     if (role === 'board_manager' || role === 'hr') return true
-    if (role === 'manager') return !emp.is_leader
+    if (role === 'manager') return !emp.is_leader && myDeptIds.includes(emp.department_id)
     return false
   })
 

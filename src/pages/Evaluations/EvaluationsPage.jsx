@@ -42,6 +42,7 @@ export default function EvaluationsPage() {
   const [existingEvals, setExistingEvals] = useState([])
   const [showSummary, setShowSummary] = useState(false)
   const [selected, setSelected] = useState(null)
+  const [myDeptIds, setMyDeptIds] = useState([]) // BP mà TBP hiện tại quản lý
 
   useEffect(() => { fetchAll() }, [])
 
@@ -60,11 +61,36 @@ export default function EvaluationsPage() {
       supabase.from('department_roles').select('*, employees(full_name, employee_code)').eq('is_active', true),
       supabase.from('employees').select('*, departments(name)').eq('status', 'active'),
     ])
-    setCycles(cyclesData || [])
+setCycles(cyclesData || [])
     setTemplates(tmplData || [])
     setDepartments(deptsData || [])
     setDepartmentRoles(rolesData || [])
     setEmployees(empsData || [])
+
+    // Xác định BP mà TBP hiện tại là leader
+    if (role === 'manager') {
+      const { data: { user } } = await supabase.auth.getUser()
+      const { data: myEmp } = await supabase
+        .from('employees')
+        .select('id')
+        .eq('user_id', user.id)
+        .single()
+      if (myEmp) {
+        const myRoles = (rolesData || []).filter(r => r.employee_id === myEmp.id && r.role_type === 'leader')
+        const myDirectDeptIds = myRoles.map(r => r.department_id)
+        // Thêm cả các BP con bên dưới
+        const getDescendantIds = (depts, parentId) => {
+          const children = depts.filter(d => d.parent_id === parentId)
+          return [...children.map(c => c.id), ...children.flatMap(c => getDescendantIds(depts, c.id))]
+        }
+        const allMyDeptIds = [
+          ...myDirectDeptIds,
+          ...myDirectDeptIds.flatMap(id => getDescendantIds(deptsData || [], id))
+        ]
+        setMyDeptIds(allMyDeptIds)
+      }
+    }
+
     setLoading(false)
   }
 
@@ -328,10 +354,10 @@ const handleSubmitAll = async () => {
     setExistingEvals(evals || [])
   }
 
-  const visibleEmployees = cycleEmployees.filter(emp => {
+const visibleEmployees = cycleEmployees.filter(emp => {
     if (role === 'board_manager') return true
     if (role === 'hr') return !emp.is_leader
-    if (role === 'manager') return !emp.is_leader
+    if (role === 'manager') return !emp.is_leader && myDeptIds.includes(emp.department_id)
     return false
   })
 
