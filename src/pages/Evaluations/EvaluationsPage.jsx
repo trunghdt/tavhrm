@@ -48,6 +48,8 @@ export default function EvaluationsPage() {
 
   const fetchAll = async () => {
     setLoading(true)
+    const { data: { user } } = await supabase.auth.getUser()
+
     const [
       { data: cyclesData },
       { data: tmplData },
@@ -94,6 +96,20 @@ setCycles(cyclesData || [])
     setLoading(false)
   }
 
+const resolveDeptLevels = (deptId) => {
+  const chain = []
+  let current = departments.find(d => d.id === deptId)
+  while (current) {
+    chain.unshift(current)
+    current = current.parent_id ? departments.find(d => d.id === current.parent_id) : null
+  }
+  // chain[0] = Chi nhánh, chain[1] = Bộ phận, chain[2] = Tổ
+  return {
+    branch: chain[0]?.name || '—',
+    department: chain[1]?.name || '—',
+    team: chain[2]?.name || '—',
+  }
+}
   const findLeader = (deptId) => {
     const leader = departmentRoles.find(r => r.department_id === deptId && r.role_type === 'leader')
     if (leader) return leader
@@ -372,8 +388,8 @@ const visibleEmployees = cycleEmployees.filter(emp => {
   const flatDepts = buildDeptOptions(departments)
 
   const SummaryView = () => {
-    const nonLeaders = cycleEmployees.filter(e => !e.is_leader)
-    const leaders = cycleEmployees.filter(e => e.is_leader)
+const nonLeaders = visibleEmployees.filter(e => !e.is_leader)
+const leaders = visibleEmployees.filter(e => e.is_leader)
 
     const showGroup = (group, title) => (
       <div style={{ marginBottom: 24 }}>
@@ -382,6 +398,9 @@ const visibleEmployees = cycleEmployees.filter(emp => {
           <thead>
             <tr style={styles.thead}>
               <th style={styles.th}>Nhân viên</th>
+              <th style={styles.th}>Chi nhánh</th>
+              <th style={styles.th}>Bộ phận</th>
+              <th style={styles.th}>Tổ</th>
               <th style={styles.th}>Loại ĐG</th>
               <th style={styles.th}>Điểm TBP</th>
               {(role === 'hr' || role === 'board_manager') && <th style={styles.th}>Điểm HR</th>}
@@ -415,6 +434,13 @@ const visibleEmployees = cycleEmployees.filter(emp => {
                       </div>
                     </div>
                   </td>
+                  {(() => { const lvl = resolveDeptLevels(emp.department_id); return (
+  <>
+    <td style={styles.td}><span style={{ fontSize: 12 }}>{lvl.branch}</span></td>
+    <td style={styles.td}><span style={{ fontSize: 12 }}>{lvl.department}</span></td>
+    <td style={styles.td}><span style={{ fontSize: 12 }}>{lvl.team}</span></td>
+  </>
+) })()}
                   <td style={styles.td}><span style={{ fontSize: 11 }}>{TEMPLATE_LABELS[emp.template_type]}</span></td>
                   <td style={styles.td}>
                     {tbpScore ? <span style={{ fontSize: 13 }}>{calcTotalScore(tbpScore, emp)} đ</span>

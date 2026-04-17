@@ -117,7 +117,20 @@ setSalaryMap(sMap)
 
     setLoading(false)
   }
-
+const resolveDeptLevels = (deptId) => {
+  const chain = []
+  let current = departments.find(d => d.id === deptId)
+  while (current) {
+    chain.unshift(current)
+    current = current.parent_id ? departments.find(d => d.id === current.parent_id) : null
+  }
+  // chain[0] = Chi nhánh, chain[1] = Bộ phận, chain[2] = Tổ
+  return {
+    branch: chain[0]?.name || '—',
+    department: chain[1]?.name || '—',
+    team: chain[2]?.name || '—',
+  }
+}
   const findLeader = (deptId) => {
     const leader = departmentRoles.find(r => r.department_id === deptId && r.role_type === 'leader')
     if (leader) return leader
@@ -441,6 +454,9 @@ const visibleEmployees = cycleEmployees.filter(emp => {
           <thead>
             <tr style={styles.thead}>
               <th style={styles.th}>Nhân viên</th>
+              <th style={styles.th}>Chi nhánh</th>
+              <th style={styles.th}>Bộ phận</th>
+              <th style={styles.th}>Tổ</th>
               <th style={styles.th}>Lương hiện tại</th>
               <th style={styles.th}>TBP đề xuất</th>
               {(role === 'hr' || role === 'board_manager') && <th style={styles.th}>HR điều chỉnh</th>}
@@ -461,16 +477,23 @@ const visibleEmployees = cycleEmployees.filter(emp => {
                 (role === 'board_manager' && prop && propStatus === 'hr_reviewed')
               return (
                 <tr key={emp.id} style={styles.tr}>
-                  <td style={styles.td}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <div style={{ ...styles.empAvatar, width: 28, height: 28, fontSize: 11 }}>{emp.full_name?.[0]}</div>
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 600 }}>{emp.full_name}</div>
-                        <div style={{ fontSize: 11, color: '#6b7280' }}>{emp.employee_code}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td style={styles.td}><span style={{ fontSize: 12 }}>{fmt(currentTotal)}</span></td>
+<td style={styles.td}>
+  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+    <div style={{ ...styles.empAvatar, width: 28, height: 28, fontSize: 11 }}>{emp.full_name?.[0]}</div>
+    <div>
+      <div style={{ fontSize: 13, fontWeight: 600 }}>{emp.full_name}</div>
+      <div style={{ fontSize: 11, color: '#6b7280' }}>{emp.employee_code}</div>
+    </div>
+  </div>
+</td>
+{(() => { const lvl = resolveDeptLevels(emp.department_id); return (
+  <>
+    <td style={styles.td}><span style={{ fontSize: 12 }}>{lvl.branch}</span></td>
+    <td style={styles.td}><span style={{ fontSize: 12 }}>{lvl.department}</span></td>
+    <td style={styles.td}><span style={{ fontSize: 12 }}>{lvl.team}</span></td>
+  </>
+) })()}
+<td style={styles.td}><span style={{ fontSize: 12 }}>{fmt(currentTotal)}</span></td>
                   <td style={styles.td}>
                     {prop?.proposed_salary ? (
                       <span style={{ fontSize: 12, fontWeight: 600, color: prop.proposed_salary > currentTotal ? '#16a34a' : prop.proposed_salary < currentTotal ? '#dc2626' : '#374151' }}>
