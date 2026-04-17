@@ -107,11 +107,29 @@ setSalaryMap(sMap)
           const children = depts.filter(d => d.parent_id === parentId)
           return [...children.map(c => c.id), ...children.flatMap(c => getDescendantIds(depts, c.id))]
         }
-        const allMyDeptIds = [
-          ...myDirectDeptIds,
-          ...myDirectDeptIds.flatMap(id => getDescendantIds(deptsData || [], id))
-        ]
-        setMyDeptIds(allMyDeptIds)
+// Lấy tất cả dept con
+const allDescendants = myDirectDeptIds.flatMap(id => getDescendantIds(deptsData || [], id))
+
+// Loại bỏ các dept con đã có leader riêng (không phải mình)
+const deptIdsWithOtherLeader = (rolesData || [])
+  .filter(r =>
+    r.role_type === 'leader' &&
+    r.employee_id !== myEmp.id &&
+    allDescendants.includes(r.department_id)
+  )
+  .map(r => r.department_id)
+
+// Loại bỏ luôn tất cả con cháu của dept đã có leader riêng
+const deptIdsToExclude = [
+  ...deptIdsWithOtherLeader,
+  ...deptIdsWithOtherLeader.flatMap(id => getDescendantIds(deptsData || [], id))
+]
+
+const allMyDeptIds = [
+  ...myDirectDeptIds,
+  ...allDescendants.filter(id => !deptIdsToExclude.includes(id))
+]
+setMyDeptIds(allMyDeptIds)
       }
     }
 
