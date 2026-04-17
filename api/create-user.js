@@ -50,9 +50,9 @@ export default async function handler(req, res) {
     }
   )
 
-  // Liên kết employee với user_id
+// Liên kết employee với user_id
   if (employeeId) {
-    await fetch(
+    const patchRes = await fetch(
       `${process.env.SUPABASE_URL}/rest/v1/employees?id=eq.${employeeId}`,
       {
         method: 'PATCH',
@@ -60,11 +60,16 @@ export default async function handler(req, res) {
           'Content-Type': 'application/json',
           'apikey': process.env.SUPABASE_SERVICE_KEY,
           'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
-          'Prefer': 'return=minimal',
+          'Prefer': 'return=representation',
         },
         body: JSON.stringify({ user_id: userId }),
       }
     )
+    const patchData = await patchRes.json()
+    console.log('PATCH employees result:', patchRes.status, JSON.stringify(patchData))
+    if (!patchRes.ok) {
+      console.error('PATCH employees failed:', patchData)
+    }
   }
 
   return res.status(200).json({ success: true, userId })

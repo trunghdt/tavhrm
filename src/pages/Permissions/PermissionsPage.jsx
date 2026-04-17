@@ -63,10 +63,18 @@ export default function PermissionsPage() {
     const empsWithPerms = (emps || []).map(emp => ({
       ...emp,
       userPerm: Object.values(permMap).find(p => {
-        // Match theo user_id trong employees
         return emp.user_id && p.user_id === emp.user_id
       }) || null
     }))
+
+    // Sort theo thứ tự role: Board Manager → HR → TBP → Nhân viên → Chưa phân quyền
+    const ROLE_ORDER = { board_manager: 0, hr: 1, manager: 2, employee: 3 }
+    empsWithPerms.sort((a, b) => {
+      const aOrder = a.userPerm?.role ? (ROLE_ORDER[a.userPerm.role] ?? 4) : 4
+      const bOrder = b.userPerm?.role ? (ROLE_ORDER[b.userPerm.role] ?? 4) : 4
+      if (aOrder !== bOrder) return aOrder - bOrder
+      return (a.full_name || '').localeCompare(b.full_name || '', 'vi')
+    })
 
     setEmployees(empsWithPerms)
     setLoading(false)
