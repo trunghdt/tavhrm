@@ -255,16 +255,18 @@ if (role === 'board_manager') {
     if (role === 'manager') {
       setPropSalary({ ...currentSal, proposed_total: existing?.proposed_salary || currentTotal })
       setPropReason(existing?.manager_reason || '')
-    } else if (role === 'hr') {
-  const tbpProposed = existing?.proposed_salary || 0
-  const increase = Math.max(0, tbpProposed - currentTotal)
-  setPropSalary({
-    base_salary: currentSal.base_salary || 0,
-    hieu_suat: (currentSal.hieu_suat || 0) + increase,
-    chuyen_can: currentSal.chuyen_can || 0,
-    doi_song: currentSal.doi_song || 0,
-    tich_luy: currentSal.tich_luy || 0,
-  })
+} else if (role === 'hr') {
+      const tbpProposed = existing?.proposed_salary || 0
+      const increase = Math.max(0, tbpProposed - currentTotal)
+      // Ưu tiên load data HR đã điều chỉnh, nếu chưa có thì tính từ TBP đề xuất
+      const hasHrData = existing?.hr_adjusted_salary > 0
+      setPropSalary({
+        base_salary: hasHrData ? (existing?.proposed_base_salary ?? currentSal.base_salary ?? 0) : (currentSal.base_salary || 0),
+        hieu_suat: hasHrData ? (existing?.proposed_hieu_suat ?? 0) : ((currentSal.hieu_suat || 0) + increase),
+        chuyen_can: hasHrData ? (existing?.proposed_chuyen_can ?? 0) : (currentSal.chuyen_can || 0),
+        doi_song: hasHrData ? (existing?.proposed_doi_song ?? 0) : (currentSal.doi_song || 0),
+        tich_luy: hasHrData ? (existing?.proposed_tich_luy ?? 0) : (currentSal.tich_luy || 0),
+      })
       setPropReason(existing?.hr_note || '')
     } else if (role === 'board_manager') {
       setPropSalary({
