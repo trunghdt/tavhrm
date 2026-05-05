@@ -232,10 +232,10 @@ if (role === 'board_manager' || role === 'hr') {
     if (role === 'manager' && ['submitted', 'hr_reviewed', 'approved'].includes(existing?.status)) {
       alert('Đề xuất này đã được submit và khóa lại!'); return
     }
-    if (role === 'hr') {
-      if (!existing || existing.status === 'draft') { alert('TBP chưa submit đề xuất cho nhân viên này!'); return }
-      if (['hr_reviewed', 'approved'].includes(existing?.status)) { alert('Bạn đã review đề xuất này rồi!'); return }
-    }
+  if (role === 'hr') {
+  if (!existing || existing.status === 'draft') { alert('TBP chưa submit đề xuất cho nhân viên này!'); return }
+  if (existing?.status === 'approved') { alert('Đề xuất này đã được phê duyệt, không thể sửa!'); return }
+}
 if (role === 'board_manager') {
   if (!existing || existing.status !== 'hr_reviewed') {
     // TBP chưa có đề xuất → BLĐ vẫn có thể tạo đề xuất trực tiếp
@@ -261,7 +261,7 @@ if (role === 'board_manager') {
       // Ưu tiên load data HR đã điều chỉnh, nếu chưa có thì tính từ TBP đề xuất
       const hasHrData = existing?.hr_adjusted_salary > 0
       setPropSalary({
-        base_salary: hasHrData ? (existing?.proposed_base_salary ?? currentSal.base_salary ?? 0) : (currentSal.base_salary || 0),
+        base_salary: hasHrData ? (existing?.proposed_base_salary || currentSal.base_salary || 0) : (currentSal.base_salary || 0),
         hieu_suat: hasHrData ? (existing?.proposed_hieu_suat ?? 0) : ((currentSal.hieu_suat || 0) + increase),
         chuyen_can: hasHrData ? (existing?.proposed_chuyen_can ?? 0) : (currentSal.chuyen_can || 0),
         doi_song: hasHrData ? (existing?.proposed_doi_song ?? 0) : (currentSal.doi_song || 0),
@@ -298,6 +298,7 @@ if (role === 'board_manager') {
         cycle_id: selectedCycle.id,
         employee_id: selectedEmployee.id,
         current_salary: currentTotal,
+        current_base_salary: currentSal.base_salary || 0,
         current_hieu_suat: currentSal.hieu_suat || 0,
         current_chuyen_can: currentSal.chuyen_can || 0,
         current_doi_song: currentSal.doi_song || 0,
@@ -314,6 +315,7 @@ if (role === 'board_manager') {
     } else if (role === 'hr') {
       const hrTotal = calcTotal(propSalary)
       payload = {
+        proposed_base_salary: Number(propSalary.base_salary) || 0,
         proposed_hieu_suat: Number(propSalary.hieu_suat) || 0,
         proposed_chuyen_can: Number(propSalary.chuyen_can) || 0,
         proposed_doi_song: Number(propSalary.doi_song) || 0,
@@ -322,7 +324,7 @@ if (role === 'board_manager') {
         hr_note: propReason,
         hr_reviewed_by: userId,
         hr_reviewed_at: new Date().toISOString(),
-        status: existing?.status || 'submitted',
+        status: 'hr_reviewed',
       }
 } else if (role === 'board_manager') {
   const bmTotal = calcTotal(propSalary)
