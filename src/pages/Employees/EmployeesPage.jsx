@@ -34,6 +34,9 @@ export default function EmployeesPage() {
   const [empEvals, setEmpEvals] = useState([])
   const [zoomAvatar, setZoomAvatar] = useState(null)
   const [empSalaryHistory, setEmpSalaryHistory] = useState([])
+  const [editLoginEmp, setEditLoginEmp] = useState(null)
+  const [loginForm, setLoginForm] = useState({ email: '', password: '' })
+  const [loginSaving, setLoginSaving] = useState(false)
 
 const fetchEmployeeSalary = async (employeeId) => {
   const { data } = await supabase
@@ -314,16 +317,23 @@ return <span style={{ fontSize: 13, color: '#374151' }}>{emp.position || '—'}<
 <button style={styles.viewBtn} onClick={() => setSelected(emp)}>Xem</button>
 {canEdit && (
   <>
-    <button style={{ ...styles.viewBtn, marginLeft: 6, background: '#fffbeb', color: '#d97706', border: '1px solid #fcd34d' }}
-      onClick={() => setEditEmployee(emp)}>Sửa</button>
+    <button style={{ ...styles.viewBtn, marginLeft: 6, background: '#fffbeb', color: '#d97706', border: '1px solid #fcd34d' }} onClick={() => setEditEmployee(emp)}>Sửa</button>
+{emp.user_id && (
+  <button
+    style={{ ...styles.viewBtn, marginLeft: 6, background: '#fff7ed', color: '#ea580c', border: '1px solid #fed7aa' }}
+onClick={(e) => {
+  e.stopPropagation()
+  setEditLoginEmp(emp)
+  setLoginForm({ email: `${emp.employee_code?.toLowerCase()}@tavhrm.internal`, password: '' })
+}}
+  >🔑 Đăng nhập</button>
+)}
   </>
 )}
 {role === 'board_manager' && (
   <>
-    <button style={{ ...styles.viewBtn, marginLeft: 6, background: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe' }}
-      onClick={() => setAssignEmployee(emp)}>Gán</button>
-    <button style={{ ...styles.viewBtn, marginLeft: 6, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}
-      onClick={() => handleDelete(emp)}>Xóa</button>
+    <button style={{ ...styles.viewBtn, marginLeft: 6, background: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe' }} onClick={() => setAssignEmployee(emp)}>Gán</button>
+    <button style={{ ...styles.viewBtn, marginLeft: 6, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }} onClick={() => handleDelete(emp)}>Xóa</button>
   </>
 )}
                     </td>
@@ -615,6 +625,79 @@ onClick={() => {
     onClose={() => setAssignEmployee(null)}
     onRefresh={fetchEmployees}
   />
+)}
+{editLoginEmp && (
+  <div style={styles.overlay} onClick={() => setEditLoginEmp(null)}>
+    <div style={{ background: '#fff', borderRadius: 12, width: 420, padding: 32, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}
+      onClick={e => e.stopPropagation()}>
+      <h2 style={{ fontSize: 18, fontWeight: 700, color: '#111827', marginBottom: 4 }}>🔑 Sửa thông tin đăng nhập</h2>
+      <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 24 }}>{editLoginEmp.full_name} · {editLoginEmp.employee_code}</p>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 24 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <label style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Email đăng nhập</label>
+          <input
+            style={{ padding: '9px 12px', borderRadius: 7, border: '1px solid #d1d5db', fontSize: 14, outline: 'none' }}
+            value={loginForm.email}
+            onChange={e => setLoginForm({ ...loginForm, email: e.target.value })}
+            placeholder="email@tavhrm.internal"
+          />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <label style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Mật khẩu mới</label>
+          <input
+            style={{ padding: '9px 12px', borderRadius: 7, border: '1px solid #d1d5db', fontSize: 14, outline: 'none' }}
+            type="password"
+            value={loginForm.password}
+            onChange={e => setLoginForm({ ...loginForm, password: e.target.value })}
+            placeholder="Để trống nếu không đổi mật khẩu"
+          />
+          <span style={{ fontSize: 11, color: '#6b7280' }}>Để trống = giữ mật khẩu cũ. Nhập mới để đổi.</span>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 12, justifyContent: 'space-between', alignItems: 'center' }}>
+        <button
+          style={{ padding: '8px 14px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 7, fontSize: 13, cursor: 'pointer' }}
+          onClick={async () => {
+            if (!confirm(`Reset mật khẩu ${editLoginEmp.full_name} về "tav@12345"?`)) return
+            const res = await fetch('/api/reset-password', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ userId: editLoginEmp.user_id }),
+            })
+            const data = await res.json()
+            if (data.success) { alert('✅ Đã reset về tav@12345'); setEditLoginEmp(null) }
+            else alert('❌ ' + (data.error || 'Lỗi'))
+          }}
+        >🔄 Reset về mặc định</button>
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button style={{ padding: '9px 20px', background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: 8, fontSize: 14, cursor: 'pointer' }}
+            onClick={() => setEditLoginEmp(null)}>Hủy</button>
+          <button
+            style={{ padding: '9px 20px', background: '#1a56db', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
+            disabled={loginSaving}
+            onClick={async () => {
+              if (!loginForm.email) { alert('Vui lòng nhập email!'); return }
+              setLoginSaving(true)
+              const body = { userId: editLoginEmp.user_id, newEmail: loginForm.email }
+              if (loginForm.password) body.newPassword = loginForm.password
+              const res = await fetch('/api/reset-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+              })
+              const data = await res.json()
+              setLoginSaving(false)
+              if (data.success) { alert('✅ Đã cập nhật thông tin đăng nhập!'); setEditLoginEmp(null) }
+              else alert('❌ ' + (data.error || 'Lỗi'))
+            }}
+          >{loginSaving ? 'Đang lưu...' : '💾 Lưu'}</button>
+        </div>
+      </div>
+    </div>
+  </div>
 )}
 {/* Modal zoom avatar */}
 {zoomAvatar && (
