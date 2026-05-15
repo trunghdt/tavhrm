@@ -11,6 +11,7 @@ const MENU_GROUPS = [
       { path: '/employees', icon: '👥', label: 'Danh sách nhân viên', roles: ['board_manager', 'hr', 'manager'] },
       { path: '/evaluations', icon: '⭐', label: 'Đánh giá năng lực', roles: ['board_manager', 'hr', 'manager'] },
       { path: '/salary-review', icon: '💰', label: 'Đánh giá tăng lương', roles: ['board_manager', 'hr', 'manager'] },
+      { path: '/payroll', icon: '💵', label: 'Bảng lương', roles: ['board_manager', 'hr'] },
       { path: '/permissions', icon: '🔐', label: 'Phân quyền hệ thống', roles: ['board_manager'] },
     ]
   },

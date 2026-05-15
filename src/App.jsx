@@ -13,6 +13,7 @@ import ChangePasswordPage from './pages/Auth/ChangePasswordPage'
 import MyProfilePage from "./pages/Employees/MyProfilePage"
 import MyEvaluationsPage from "./pages/Employees/MyEvaluationsPage"
 import MySalaryPage from "./pages/Employees/MySalaryPage"
+import PayrollPage from './pages/Payroll/PayrollPage'
 
 function App() {
   const [user, setUser] = useState(undefined)
@@ -58,6 +59,7 @@ function App() {
           <Route path="/my-profile" element={<MyProfilePage />} />
           <Route path="/my-evaluations" element={<MyEvaluationsPage />} />
           <Route path="/my-salary" element={<MySalaryPage />} />
+          <Route path="/payroll" element={<PayrollPage />} />
         </Route>
       </Routes>
     </BrowserRouter>
