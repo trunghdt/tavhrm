@@ -21,7 +21,7 @@ const ALL_FIELDS = [
   { key: 'start_date', label: 'Ngày vào làm', default: false },
   { key: 'end_date', label: 'Ngày nghỉ việc', default: false },
   { key: 'address', label: 'Địa chỉ', default: false },
-  { key: 'base_salary', label: 'Mức lương hiện tại', default: false },
+  { key: 'base_salary', label: 'Tổng lương hiện tại', default: false },
   { key: 'latest_eval_score', label: 'Điểm đánh giá gần nhất', default: false },
   { key: 'latest_eval_ranking', label: 'Xếp loại gần nhất', default: false },
 ]
@@ -88,15 +88,18 @@ export default function ExportExcelModal({ onClose }) {
 
     // Fetch lương nếu cần
     let salaryMap = {}
-    if (selectedFields.includes('base_salary')) {
-      const { data: salaries } = await supabase
-        .from('salary_records')
-        .select('employee_id, base_salary, effective_date')
-        .order('effective_date', { ascending: false })
-      salaries?.forEach(s => {
-        if (!salaryMap[s.employee_id]) salaryMap[s.employee_id] = s.base_salary
-      })
+if (selectedFields.includes('base_salary')) {
+  const { data: salaries } = await supabase
+    .from('salary_records')
+    .select('employee_id, base_salary, hieu_suat, chuyen_can, doi_song, tich_luy, effective_date')
+    .order('created_at', { ascending: false })
+  salaries?.forEach(s => {
+    if (!salaryMap[s.employee_id]) {
+      const total = (s.base_salary || 0) + (s.hieu_suat || 0) + (s.chuyen_can || 0) + (s.doi_song || 0) + (s.tich_luy || 0)
+      salaryMap[s.employee_id] = total
     }
+  })
+}
 
     // Fetch đánh giá gần nhất nếu cần
     let evalMap = {}
