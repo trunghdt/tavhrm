@@ -104,50 +104,47 @@ const fetchEmployeeSalary = async (employeeId) => {
   }
 
 const getFilteredEmployees = () => {
-  if (!selectedNode) return []
+    if (!selectedNode) return []
 
-  let filtered = []
+    // Nếu đang search → tìm trong toàn bộ nhân viên, bỏ qua filter node
+    if (search.trim()) {
+      return employees.filter(e =>
+        e.full_name?.toLowerCase().includes(search.toLowerCase()) ||
+        e.employee_code?.toLowerCase().includes(search.toLowerCase()) ||
+        e.position?.toLowerCase().includes(search.toLowerCase())
+      )
+    }
 
-  if (selectedNode.id === 'root') {
-    filtered = employees.filter(emp => !emp.department_id)
-  } else {
-    // NV thuộc đúng node này
-    const deptEmployees = employees.filter(emp => emp.department_id === selectedNode.id)
+    let filtered = []
+    if (selectedNode.id === 'root') {
+      filtered = employees.filter(emp => !emp.department_id)
+    } else {
+      // NV thuộc đúng node này
+      const deptEmployees = employees.filter(emp => emp.department_id === selectedNode.id)
+      // Leaders của node này (có thể là NV của node khác)
+      const nodeRoles = departmentRoles.filter(r => r.department_id === selectedNode.id)
+      const leaderIds = nodeRoles.map(r => r.employee_id)
+      const leaders = employees.filter(emp => leaderIds.includes(emp.id) && emp.department_id !== selectedNode.id)
+      // Gộp: leaders từ node khác + NV của node này (không trùng)
+      const allIds = new Set([...deptEmployees.map(e => e.id)])
+      const extraLeaders = leaders.filter(e => !allIds.has(e.id))
+      filtered = [...deptEmployees, ...extraLeaders]
+    }
 
-    // Leaders của node này (có thể là NV của node khác)
-    const nodeRoles = departmentRoles.filter(r => r.department_id === selectedNode.id)
-    const leaderIds = nodeRoles.map(r => r.employee_id)
-    const leaders = employees.filter(emp => leaderIds.includes(emp.id) && emp.department_id !== selectedNode.id)
+    // Sắp xếp: Leader → Sub-leader → NV thường
+    if (selectedNode.id !== 'root') {
+      const nodeRoles = departmentRoles.filter(r => r.department_id === selectedNode.id)
+      filtered.sort((a, b) => {
+        const aRole = nodeRoles.find(r => r.employee_id === a.id)
+        const bRole = nodeRoles.find(r => r.employee_id === b.id)
+        const aOrder = aRole?.role_type === 'leader' ? 0 : aRole?.role_type === 'sub_leader' ? 1 : 2
+        const bOrder = bRole?.role_type === 'leader' ? 0 : bRole?.role_type === 'sub_leader' ? 1 : 2
+        return aOrder - bOrder
+      })
+    }
 
-    // Gộp: leaders từ node khác + NV của node này (không trùng)
-    const allIds = new Set([...deptEmployees.map(e => e.id)])
-    const extraLeaders = leaders.filter(e => !allIds.has(e.id))
-    filtered = [...deptEmployees, ...extraLeaders]
+    return filtered
   }
-
-  // Filter theo search
-  if (search) {
-    filtered = filtered.filter(e =>
-      e.full_name?.toLowerCase().includes(search.toLowerCase()) ||
-      e.employee_code?.toLowerCase().includes(search.toLowerCase()) ||
-      e.position?.toLowerCase().includes(search.toLowerCase())
-    )
-  }
-
-  // Sắp xếp: Leader → Sub-leader → NV thường
-  if (selectedNode.id !== 'root') {
-    const nodeRoles = departmentRoles.filter(r => r.department_id === selectedNode.id)
-    filtered.sort((a, b) => {
-      const aRole = nodeRoles.find(r => r.employee_id === a.id)
-      const bRole = nodeRoles.find(r => r.employee_id === b.id)
-      const aOrder = aRole?.role_type === 'leader' ? 0 : aRole?.role_type === 'sub_leader' ? 1 : 2
-      const bOrder = bRole?.role_type === 'leader' ? 0 : bRole?.role_type === 'sub_leader' ? 1 : 2
-      return aOrder - bOrder
-    })
-  }
-
-  return filtered
-}
 
   const filteredEmployees = getFilteredEmployees()
   const canEdit = role === 'board_manager' || role === 'hr'
