@@ -48,13 +48,13 @@ export default function MySalaryPage() {
     setSalaryRecord(salaryData || null)
 
     // Lấy 3 phiếu lương gần nhất đã approved
-    const { data: slips } = await supabase
-      .from('payslips')
-      .select('*, payroll_periods(year, month, status, title), employees(full_name, employee_code)')
-      .eq('employee_id', emp.id)
-      .eq('status', 'approved')
-      .order('created_at', { ascending: false })
-      .limit(3)
+const { data: slips } = await supabase
+  .from('payslips')
+  .select('*, payroll_periods!inner(year, month, status, title), employees(full_name, employee_code)')
+  .eq('employee_id', emp.id)
+  .eq('payroll_periods.status', 'approved')
+  .order('created_at', { ascending: false })
+  .limit(3)
 
     setPayslips(slips || [])
     if (slips?.length > 0) setSelected(slips[0])
