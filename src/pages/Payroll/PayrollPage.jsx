@@ -399,11 +399,11 @@ export function PayslipCard({ slip, onClose, period }) {
     <p style={{ fontSize: 24, fontWeight: 800, color: '#16a34a' }}>{fmt(slip.net_salary)} đ</p>
   </div>
 </div>
-{slip.tich_luy_hien_tai > 0 && (
+{slip.thuong_tich_luy_tet > 0 && (
   <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 10, padding: '14px 20px', marginTop: 10 }}>
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
       <p style={{ fontSize: 12, color: '#d97706', fontWeight: 700 }}>🎄 Tổng tích lũy Tết đến hiện tại</p>
-      <p style={{ fontSize: 18, fontWeight: 800, color: '#d97706' }}>{fmt(slip.tich_luy_hien_tai)} đ</p>
+      <p style={{ fontSize: 18, fontWeight: 800, color: '#d97706' }}>{fmt(slip.thuong_tich_luy_tet)} đ</p>
     </div>
   </div>
 )}
