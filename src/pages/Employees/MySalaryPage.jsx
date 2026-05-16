@@ -48,18 +48,34 @@ export default function MySalaryPage() {
     setSalaryRecord(salaryData || null)
 
     // Lấy 3 phiếu lương gần nhất đã approved
-const { data: slips } = await supabase
-  .from('payslips')
-  .select('*, payroll_periods!inner(year, month, status, title), employees(full_name, employee_code)')
-  .eq('employee_id', emp.id)
-  .eq('payroll_periods.status', 'approved')
-  .order('created_at', { ascending: false })
+// Lấy các period đã approved
+const { data: approvedPeriods } = await supabase
+  .from('payroll_periods')
+  .select('id, year, month, title, status')
+  .eq('status', 'approved')
+  .order('year', { ascending: false })
+  .order('month', { ascending: false })
   .limit(3)
 
-    setPayslips(slips || [])
-    if (slips?.length > 0) setSelected(slips[0])
-    setLoading(false)
-  }
+const periodIds = (approvedPeriods || []).map(p => p.id)
+let slips = []
+if (periodIds.length > 0) {
+  const { data: slipData } = await supabase
+    .from('payslips')
+    .select('*, employees(full_name, employee_code)')
+    .eq('employee_id', emp.id)
+    .in('period_id', periodIds)
+    .order('created_at', { ascending: false })
+
+  slips = (slipData || []).map(s => ({
+    ...s,
+    payroll_periods: approvedPeriods.find(p => p.id === s.period_id)
+  }))
+}
+
+setPayslips(slips)
+if (slips.length > 0) setSelected(slips[0])
+setLoading(false)
 
   if (loading) return <div style={{ padding: 24, color: '#6b7280' }}>Đang tải...</div>
 
