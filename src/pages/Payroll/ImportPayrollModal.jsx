@@ -38,6 +38,7 @@ export default function ImportPayrollModal({ onClose, onSuccess }) {
   const [step, setStep] = useState('upload') // upload | preview | saving
   const [month, setMonth] = useState('')
   const [year, setYear] = useState(new Date().getFullYear())
+  const [note, setNote] = useState('')
   const [rows, setRows] = useState([])
   const [missingEmps, setMissingEmps] = useState([])
   const [employees, setEmployees] = useState([])
@@ -166,13 +167,14 @@ export default function ImportPayrollModal({ onClose, onSuccess }) {
       const { data: { user } } = await supabase.auth.getUser()
 
       // Tạo hoặc lấy payroll_period
-      const periodTitle = `Tháng ${month}/${year}`
+      const periodTitle = note ? `Tháng ${month}/${year} - ${note}` : `Tháng ${month}/${year}`
       let period
 const { data: existingList } = await supabase
   .from('payroll_periods')
   .select('*')
   .eq('year', Number(year))
   .eq('month', Number(month))
+  .eq('title', periodTitle)
 
 const existing = existingList?.[0] || null
 
@@ -296,6 +298,11 @@ const existing = existingList?.[0] || null
                   <input style={s.input} type="number" value={year}
                     onChange={e => setYear(e.target.value)} min="2020" max="2030" />
                 </div>
+                <div style={s.field}>
+  <label style={s.label}>Ghi chú (tùy chọn)</label>
+  <input style={s.input} placeholder="VD: Bộ phận May - TAV BN"
+    value={note} onChange={e => setNote(e.target.value)} />
+</div>
               </div>
 
               {/* Upload zone */}
@@ -363,6 +370,11 @@ const existing = existingList?.[0] || null
                   <label style={s.label}>Năm</label>
                   <input style={s.input} type="number" value={year} onChange={e => setYear(e.target.value)} />
                 </div>
+                <div style={s.field}>
+  <label style={s.label}>Ghi chú (tùy chọn)</label>
+  <input style={s.input} placeholder="VD: Bộ phận May - TAV BN"
+    value={note} onChange={e => setNote(e.target.value)} />
+</div>
               </div>
 
               {/* Preview bảng */}

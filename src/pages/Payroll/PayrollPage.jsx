@@ -183,7 +183,7 @@ export default function PayrollPage() {
                     </button>
                   )}
                   {/* BLĐ: xóa */}
-                  {role === 'board_manager' && selectedPeriod.status !== 'approved' && (
+                  {role === 'board_manager' && (
                     <button style={{ padding: '8px 14px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 7, fontSize: 13, cursor: 'pointer' }}
                       onClick={() => handleDelete(selectedPeriod)}>
                       🗑️ Xóa
