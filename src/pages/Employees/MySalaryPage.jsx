@@ -76,6 +76,7 @@ if (periodIds.length > 0) {
 setPayslips(slips)
 if (slips.length > 0) setSelected(slips[0])
 setLoading(false)
+  }
 
   if (loading) return <div style={{ padding: 24, color: '#6b7280' }}>Đang tải...</div>
 
