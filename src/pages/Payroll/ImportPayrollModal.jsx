@@ -208,7 +208,7 @@ const existing = existingList?.[0] || null
           employee_id: empMap[r.ma_nv],
           status: 'draft',
           // Lương cơ bản
-          base_salary: n(row[COL.luong_co_ban_san_pham]),
+          base_salary: r.base_salary,
           luong_co_ban_bhxh: r.luong_co_ban_bhxh,
           luong_hoan_thanh: r.luong_hoan_thanh,
           phu_cap_doi_song: r.phu_cap_doi_song,
