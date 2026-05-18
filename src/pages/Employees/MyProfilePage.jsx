@@ -36,7 +36,7 @@ useEffect(() => {
       employee.employment_type === 'co_thoi_han' ? 'Hợp đồng có thời hạn' :
       employee.employment_type === 'vo_thoi_han' ? 'Hợp đồng vô thời hạn' : '—'
     ],
-    ['Trạng thái', employee.status === 'active' ? 'Đang làm việc' : employee.status === 'inactive' ? 'Đã nghỉ' : 'Thử việc'],
+    ['Trạng thái', ({ active: 'Đang làm việc', probation: 'Thử việc', inactive: 'Đã nghỉ', maternity_leave: 'Nghỉ thai sản', long_leave: 'Nghỉ dài ngày' })[employee.status] || employee.status],
     ['Ngày vào làm', employee.start_date ? new Date(employee.start_date).toLocaleDateString('vi-VN') : '—'],
     ['Địa chỉ', employee.address],
   ]

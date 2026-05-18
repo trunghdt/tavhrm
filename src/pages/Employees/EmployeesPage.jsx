@@ -11,8 +11,14 @@ import DeptManager from './DeptManager'
 import RoleAssignModal from './RoleAssignModal'
 import EmployeeRoleModal from './EmployeeRoleModal'
 
-const STATUS_LABELS = { active: 'Đang làm việc', inactive: 'Đã nghỉ', probation: 'Thử việc' }
-const STATUS_COLORS = { active: '#16a34a', inactive: '#dc2626', probation: '#d97706' }
+const STATUS_LABELS = { 
+  active: 'Đang làm việc', 
+  probation: 'Thử việc', 
+  inactive: 'Đã nghỉ',
+  maternity_leave: 'Nghỉ thai sản',
+  long_leave: 'Nghỉ dài ngày',
+}
+const STATUS_COLORS = { active: '#16a34a', inactive: '#dc2626', probation: '#d906d9', maternity_leave: '#d97706', long_leave:'#d97706' }
 
 export default function EmployeesPage() {
   const { role } = useAuthStore()
@@ -414,7 +420,7 @@ onClick={() => {
                 selected.employment_type === 'co_thoi_han' ? 'Hợp đồng có thời hạn' :
                 selected.employment_type === 'vo_thoi_han' ? 'Hợp đồng vô thời hạn' : '—'
               ],
-              ['Trạng thái', selected.status === 'active' ? 'Đang làm việc' : selected.status === 'inactive' ? 'Đã nghỉ' : 'Thử việc'],
+              ['Trạng thái', STATUS_LABELS[selected.status] || selected.status],
               ['Ngày vào làm', selected.start_date ? new Date(selected.start_date).toLocaleDateString('vi-VN') : '—'],
               ['Ngày nghỉ việc', selected.end_date ? new Date(selected.end_date).toLocaleDateString('vi-VN') : '—'],
               ['Địa chỉ', selected.address],
