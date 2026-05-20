@@ -23,6 +23,8 @@ export default function PayrollPage() {
   const [loadingPayslips, setLoadingPayslips] = useState(false)
   const [search, setSearch] = useState('')
   const [currentUserId, setCurrentUserId] = useState(null)
+  const [showMonthSummary, setShowMonthSummary] = useState(false)
+  const [monthSummaryData, setMonthSummaryData] = useState({ month: null, year: null, periods: [], payslips: [] })
 
   const canManage = role === 'board_manager' || role === 'hr'
 
@@ -90,7 +92,25 @@ export default function PayrollPage() {
     if (selectedPeriod?.id === period.id) { setSelectedPeriod(null); setPayslips([]) }
     fetchPeriods()
   }
+const handleMonthSummary = async (month, year) => {
+  // Lấy tất cả periods của tháng này
+  const { data: monthPeriods } = await supabase
+    .from('payroll_periods')
+    .select('*')
+    .eq('month', month)
+    .eq('year', year)
+    .order('title')
 
+  // Lấy tất cả payslips của các periods này
+  const periodIds = (monthPeriods || []).map(p => p.id)
+  const { data: allPayslips } = await supabase
+    .from('payslips')
+    .select('*, employees(employee_code, full_name, departments(name))')
+    .in('period_id', periodIds)
+
+  setMonthSummaryData({ month, year, periods: monthPeriods || [], payslips: allPayslips || [] })
+  setShowMonthSummary(true)
+}
   const filteredPayslips = payslips.filter(p =>
     !search || p.employees?.full_name?.toLowerCase().includes(search.toLowerCase()) ||
     p.employees?.employee_code?.toLowerCase().includes(search.toLowerCase())
@@ -125,10 +145,23 @@ export default function PayrollPage() {
                   style={{ padding: '12px 14px', borderRadius: 8, cursor: 'pointer', marginBottom: 6, border: `1px solid ${isActive ? '#bfdbfe' : '#f3f4f6'}`, background: isActive ? '#eff6ff' : '#fff' }}
                   onClick={() => fetchPayslips(period)}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>Tháng {period.month}/{period.year}</span>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>{period.title}</span>
                     <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, fontWeight: 500, background: st.bg, color: st.color }}>{st.label}</span>
                   </div>
                   {period.title && <p style={{ fontSize: 11, color: '#6b7280', marginTop: 3 }}>{period.title}</p>}
+                  {/* Nút tổng hợp tháng - hiện 1 lần mỗi tháng */}
+{(() => {
+  const samePeriods = periods.filter(p => p.month === period.month && p.year === period.year)
+  const isFirst = samePeriods[0]?.id === period.id && samePeriods.length > 1
+  if (!isFirst) return null
+  return (
+    <button
+      style={{ marginTop: 6, width: '100%', padding: '4px 0', background: '#f0f9ff', color: '#0369a1', border: '1px solid #7dd3fc', borderRadius: 5, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
+      onClick={(e) => { e.stopPropagation(); handleMonthSummary(period.month, period.year) }}>
+      📊 Tổng hợp T{period.month}/{period.year}
+    </button>
+  )
+})()}
                 </div>
               )
             })
@@ -192,7 +225,85 @@ export default function PayrollPage() {
                 </div>
               </div>
             </div>
+{showMonthSummary && (
+  <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}
+    onClick={() => setShowMonthSummary(false)}>
+    <div style={{ background: '#fff', borderRadius: 12, width: 960, maxHeight: '88vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}
+      onClick={e => e.stopPropagation()}>
+      {/* Header */}
+      <div style={{ padding: '20px 24px', borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+        <div>
+          <h2 style={{ fontSize: 18, fontWeight: 700, color: '#111827' }}>
+            📊 Tổng hợp lương Tháng {monthSummaryData.month}/{monthSummaryData.year}
+          </h2>
+          <p style={{ fontSize: 13, color: '#6b7280', marginTop: 4 }}>
+            {monthSummaryData.periods.length} bộ phận · {monthSummaryData.payslips.length} nhân viên
+          </p>
+        </div>
+        <button style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#6b7280' }}
+          onClick={() => setShowMonthSummary(false)}>✕</button>
+      </div>
 
+      {/* Tổng hợp theo bộ phận */}
+      <div style={{ overflowY: 'auto', padding: 24, flex: 1 }}>
+        {/* Stats tổng */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 24 }}>
+          {[
+            { label: 'Tổng quỹ lương', value: fmtNum(monthSummaryData.payslips.reduce((s, p) => s + (p.gross_salary || 0), 0)) + ' đ', color: '#1a56db' },
+            { label: 'Tổng thực lĩnh', value: fmtNum(monthSummaryData.payslips.reduce((s, p) => s + (p.net_salary || 0), 0)) + ' đ', color: '#16a34a' },
+            { label: 'Tổng khấu trừ', value: fmtNum(monthSummaryData.payslips.reduce((s, p) => s + (p.deductions?.tong_khau_tru || 0), 0)) + ' đ', color: '#dc2626' },
+            { label: 'Tổng nhân viên', value: monthSummaryData.payslips.length, color: '#374151' },
+          ].map(item => (
+            <div key={item.label} style={{ background: '#f9fafb', borderRadius: 8, padding: '14px 16px' }}>
+              <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 4 }}>{item.label}</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: item.color }}>{item.value}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Chi tiết theo từng kỳ/bộ phận */}
+        {monthSummaryData.periods.map(period => {
+          const periodSlips = monthSummaryData.payslips.filter(p => p.period_id === period.id)
+          if (!periodSlips.length) return null
+          return (
+            <div key={period.id} style={{ marginBottom: 24 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <h3 style={{ fontSize: 14, fontWeight: 700, color: '#374151' }}>{period.title}</h3>
+                <div style={{ display: 'flex', gap: 16, fontSize: 12, color: '#6b7280' }}>
+                  <span>Quỹ lương: <strong style={{ color: '#1a56db' }}>{fmtNum(periodSlips.reduce((s, p) => s + (p.gross_salary || 0), 0))} đ</strong></span>
+                  <span>Thực lĩnh: <strong style={{ color: '#16a34a' }}>{fmtNum(periodSlips.reduce((s, p) => s + (p.net_salary || 0), 0))} đ</strong></span>
+                  <span>{periodSlips.length} NV</span>
+                </div>
+              </div>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead style={{ background: '#f9fafb' }}>
+                  <tr>
+                    {['Mã NV', 'Họ tên', 'Bộ phận', 'Tổng lương', 'Khấu trừ', 'Thực lĩnh', 'Ngày công'].map(h => (
+                      <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 700, color: '#6b7280', fontSize: 10, textTransform: 'uppercase', borderBottom: '1px solid #e5e7eb' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {periodSlips.map(slip => (
+                    <tr key={slip.id} style={{ borderTop: '1px solid #f3f4f6' }}>
+                      <td style={{ padding: '7px 10px', fontFamily: 'monospace', fontSize: 11 }}>{slip.employees?.employee_code}</td>
+                      <td style={{ padding: '7px 10px', fontWeight: 500 }}>{slip.employees?.full_name}</td>
+                      <td style={{ padding: '7px 10px', color: '#6b7280' }}>{slip.employees?.departments?.name || '—'}</td>
+                      <td style={{ padding: '7px 10px', textAlign: 'right' }}>{fmt(slip.gross_salary)}</td>
+                      <td style={{ padding: '7px 10px', textAlign: 'right', color: '#dc2626' }}>{fmt(slip.deductions?.tong_khau_tru)}</td>
+                      <td style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 700, color: '#16a34a' }}>{fmt(slip.net_salary)}</td>
+                      <td style={{ padding: '7px 10px', textAlign: 'center', color: '#6b7280' }}>{slip.ngay_cong || slip.working_days || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  </div>
+)}
             {/* Tổng hợp nhanh */}
             {payslips.length > 0 && (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, flexShrink: 0 }}>

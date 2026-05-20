@@ -201,6 +201,8 @@ const teams = departments.filter(d => d.parent_id === selectedDeptId)
             <option value="active">Đang làm việc</option>
             <option value="probation">Thử việc</option>
             <option value="inactive">Đã nghỉ</option>
+            <option value="maternity_leave">Nghỉ thai sản</option>
+            <option value="long_leave">Nghỉ dài ngày</option>
           </select>
         </Field>
 
