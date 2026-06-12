@@ -30,6 +30,7 @@ const COL = {
   tham_gia_bhxh: 42, bhxh: 43, cong_doan: 44,
   khau_tru_khac: 45, thue_tncn: 46,
   tich_luy_hien_tai: 48,
+  tien_tich_luy: 60, // cột BI = index 60
 }
 
 const n = (v) => Number(v) || 0
@@ -128,6 +129,7 @@ export default function ImportPayrollModal({ onClose, onSuccess }) {
           thue_tncn: n(row[COL.thue_tncn]),
           tich_luy_hien_tai: n(row[COL.tich_luy_hien_tai]),
           net_salary: n(row[COL.thuc_linh]),
+          tien_tich_luy: n(row[COL.tien_tich_luy]),
         })
       }
 
