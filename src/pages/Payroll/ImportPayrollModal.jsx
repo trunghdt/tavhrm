@@ -226,6 +226,7 @@ const existing = existingList?.[0] || null
           tong_ot: r.tong_ot,
           // Thưởng
           thuong_tich_luy_tet: r.thuong_tich_luy_tet,
+          tien_tich_luy: r.tien_tich_luy,
           thuong_quan_ly: r.thuong_quan_ly,
           thuong_nang_suat: r.thuong_nang_suat,
           bu_luong_thang_truoc: r.bu_luong_thang_truoc,
