@@ -419,8 +419,9 @@ export function PayslipCard({ slip, onClose, period }) {
         ['Lương cơ bản / Sản phẩm', slip.base_salary, 'Lương chuyên cần', slip.thuong_chuyen_can],
         ['Lương hoàn thành công việc', slip.luong_hoan_thanh, 'Phụ cấp đời sống', slip.phu_cap_doi_song],
         ['Lương sản phẩm', slip.luong_san_pham, 'Phụ cấp ăn ca', slip.phu_cap_an_ca],
+        ['Tiền tích lũy', slip.tien_tich_luy, '', ''],
       ],
-      total: ['Tổng lương (1)', (slip.base_salary||0)+ (slip.thuong_chuyen_can||0) + (slip.luong_hoan_thanh||0) + (slip.phu_cap_doi_song||0) + (slip.phu_cap_an_ca||0) ],
+      total: ['Tổng lương (1)', (slip.base_salary||0)+ (slip.thuong_chuyen_can||0) + (slip.luong_hoan_thanh||0) + (slip.phu_cap_doi_song||0) + (slip.phu_cap_an_ca||0) + (slip.tien_tich_luy||0)],
     },
     {
       title: '⏰ TRỢ CẤP LÀM THÊM',
@@ -449,8 +450,9 @@ export function PayslipCard({ slip, onClose, period }) {
         ['Số giờ đi muộn', slip.so_gio_di_muon, 'Trừ lương đi muộn', slip.tru_luong_di_muon],
         ['BHXH', slip.bhxh, 'Thuế TNCN', slip.thue_tncn],
         ['Phí công đoàn', slip.cong_doan, 'Khấu trừ khác', slip.khau_tru_khac],
+        ['Khấu trừ tích lũy', slip.tien_tich_luy, '', ''],
       ],
-      total: ['Tổng khấu trừ (4)', slip.deductions?.tong_khau_tru],
+      total: ['Tổng khấu trừ (4)', (slip.deductions?.tong_khau_tru || 0) + (slip.tien_tich_luy || 0)],
     },
   ]
 
