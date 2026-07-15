@@ -435,7 +435,7 @@ export function PayslipCard({ slip, onClose, period }) {
       title: '🎁 THƯỞNG',
       rows: [
         ['Thưởng năng suất', slip.thuong_nang_suat, 'Bù lương tháng trước', slip.bu_luong_thang_truoc],
-        ['Thưởng quản lý', slip.thuong_quan_ly],
+        ['Thưởng quản lý', slip.thuong_quan_ly, 'Hưởng lương ngày phép', slip.huong_luong_ngay_phep],
       
       ],
       total: ['Tổng thưởng (3)', (slip.thuong_nang_suat||0) + (slip.bu_luong_thang_truoc||0) + (slip.thuong_quan_ly||0)],
@@ -448,10 +448,10 @@ export function PayslipCard({ slip, onClose, period }) {
         ['Ngày phép sử dụng', slip.ngay_phep, 'Số lần đi muộn', slip.so_lan_di_muon],
         ['Số giờ đi muộn', slip.so_gio_di_muon, 'Trừ lương đi muộn', slip.tru_luong_di_muon],
         ['BHXH', slip.bhxh, 'Thuế TNCN', slip.thue_tncn],
-        ['Phí công đoàn', slip.cong_doan, 'Khấu trừ khác', slip.khau_tru_khac],
-        ['Khấu trừ tích lũy', slip.tien_tich_luy, '', ''],
+        ['Phí công đoàn', slip.cong_doan, 'Trừ chuyên cần', slip.tru_chuyen_can],
+        ['Khấu trừ tích lũy', slip.tien_tich_luy, 'Khấu trừ khác', slip.khau_tru_khac],
       ],
-      total: ['Tổng khấu trừ (4)', (slip.deductions?.tong_khau_tru || 0) + (slip.tien_tich_luy || 0)],
+      total: ['Tổng khấu trừ (4)', (slip.deductions?.tong_khau_tru || 0)],
     },
   ]
 

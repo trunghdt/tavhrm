@@ -23,12 +23,12 @@ const COL = {
   ot_nghi_gio: 24, ot_nghi_tien: 25,
   ot_le_gio: 26, ot_le_tien: 27, tong_ot: 28,
   thuong_tich_luy_tet: 29, thuong_quan_ly: 30, thuong_nang_suat: 31,
-  bu_luong_thang_truoc: 32, thuong_chuyen_can: 33,
+  bu_luong_thang_truoc: 32, huong_luong_ngay_phep: 33,
   ngay_cong: 34, ngay_le_huong_luong: 35, so_ngay_nghi: 36,
   ngay_phep: 37, tru_luong_nghi: 38,
   so_lan_di_muon: 39, so_gio_di_muon: 40, tru_luong_di_muon: 41,
   tham_gia_bhxh: 42, bhxh: 43, cong_doan: 44,
-  khau_tru_khac: 45, thue_tncn: 46,
+  khau_tru_khac: 45, thue_tncn: 46, tru_chuyen_can: 47,
   tich_luy_hien_tai: 48,
   tien_tich_luy: 60, // cột BI = index 60
 }
@@ -114,7 +114,7 @@ export default function ImportPayrollModal({ onClose, onSuccess }) {
           thuong_quan_ly: n(row[COL.thuong_quan_ly]),
           thuong_nang_suat: n(row[COL.thuong_nang_suat]),
           bu_luong_thang_truoc: n(row[COL.bu_luong_thang_truoc]),
-          thuong_chuyen_can: n(row[COL.thuong_chuyen_can]),
+          huong_luong_ngay_phep: n(row[COL.huong_luong_ngay_phep]),
           ngay_cong: n(row[COL.ngay_cong]),
           ngay_le_huong_luong: n(row[COL.ngay_le_huong_luong]),
           so_ngay_nghi: n(row[COL.so_ngay_nghi]),
@@ -127,6 +127,7 @@ export default function ImportPayrollModal({ onClose, onSuccess }) {
           cong_doan: n(row[COL.cong_doan]),
           khau_tru_khac: n(row[COL.khau_tru_khac]),
           thue_tncn: n(row[COL.thue_tncn]),
+          tru_chuyen_can: n(row[COL.tru_chuyen_can]),
           tich_luy_hien_tai: n(row[COL.tich_luy_hien_tai]),
           net_salary: n(row[COL.thuc_linh]),
           tien_tich_luy: n(row[COL.tien_tich_luy]),
@@ -230,7 +231,7 @@ const existing = existingList?.[0] || null
           thuong_quan_ly: r.thuong_quan_ly,
           thuong_nang_suat: r.thuong_nang_suat,
           bu_luong_thang_truoc: r.bu_luong_thang_truoc,
-          thuong_chuyen_can: r.thuong_chuyen_can,
+          huong_luong_ngay_phep: r.huong_luong_ngay_phep,
           // Ngày công & khấu trừ
           ngay_cong: r.ngay_cong,
           ngay_le_huong_luong: r.ngay_le_huong_luong,
@@ -244,6 +245,7 @@ const existing = existingList?.[0] || null
           cong_doan: r.cong_doan,
           khau_tru_khac: r.khau_tru_khac,
           thue_tncn: r.thue_tncn,
+          tru_chuyen_can: r.tru_chuyen_can,
           tich_luy_hien_tai: r.tich_luy_hien_tai,
           // Kết quả
           gross_salary: r.gross_salary,
