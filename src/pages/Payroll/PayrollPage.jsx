@@ -416,9 +416,10 @@ export function PayslipCard({ slip, onClose, period }) {
     {
       title: '💵 LƯƠNG',
       rows: [
-        ['Lương cơ bản / Sản phẩm', slip.base_salary, 'Lương chuyên cần', slip.luong_chuyen_can],
+        ['Lương cơ bản', slip.base_salary, 'Lương sản phẩm', slip.luong_san_pham],
         ['Lương hoàn thành công việc', slip.luong_hoan_thanh, 'Phụ cấp đời sống', slip.phu_cap_doi_song],
-        ['Tiền tích lũy', slip.tien_tich_luy, 'Phụ cấp ăn ca', slip.phu_cap_an_ca],
+        ['Tiền tích lũy', slip.tien_tich_luy, 'Lương chuyên cần', slip.luong_chuyen_can],
+        ['Phụ cấp ăn ca', slip.phu_cap_an_ca]
       ],
       total: ['Tổng lương (1)', (slip.tong_luong_no_ot||0)],
     },
