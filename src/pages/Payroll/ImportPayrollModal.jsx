@@ -214,7 +214,7 @@ const existing = existingList?.[0] || null
           status: 'draft',
           // Lương cơ bản
           base_salary: r.base_salary,
-          luong_co_ban_bhxh: r.luong_co_ban_bhxh,
+          //luong_co_ban_bhxh: r.luong_co_ban_bhxh,
           luong_hoan_thanh: r.luong_hoan_thanh,
           phu_cap_doi_song: r.phu_cap_doi_song,
           phu_cap_an_ca: r.phu_cap_an_ca,
