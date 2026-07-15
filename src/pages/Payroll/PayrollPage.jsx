@@ -438,7 +438,7 @@ export function PayslipCard({ slip, onClose, period }) {
         ['Thưởng quản lý', slip.thuong_quan_ly, 'Hưởng lương ngày phép', slip.huong_luong_ngay_phep],
       
       ],
-      total: ['Tổng thưởng (3)', (slip.thuong_nang_suat||0) + (slip.bu_luong_thang_truoc||0) + (slip.thuong_quan_ly||0)],
+      total: ['Tổng thưởng (3)', (slip.thuong_nang_suat||0) + (slip.bu_luong_thang_truoc||0) + (slip.thuong_quan_ly||0) + (slip.huong_luong_ngay_phep)],
     },
     {
       title: '📋 KHẤU TRỪ',
