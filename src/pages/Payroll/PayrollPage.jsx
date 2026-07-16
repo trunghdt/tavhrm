@@ -450,7 +450,7 @@ export function PayslipCard({ slip, onClose, period }) {
         ['Số giờ đi muộn', slip.so_gio_di_muon, 'Trừ lương đi muộn', slip.tru_luong_di_muon],
         ['BHXH', slip.bhxh, 'Thuế TNCN', slip.thue_tncn],
         ['Phí công đoàn', slip.cong_doan, 'Trừ chuyên cần', slip.tru_chuyen_can],
-        ['Khấu trừ tích lũy', slip.tien_tich_luy, 'Khấu trừ khác', slip.khau_tru_khac],
+        ['Khấu trừ tích lũy', slip.tich_luy_hien_tai, 'Khấu trừ khác', slip.khau_tru_khac],
       ],
       total: ['Tổng khấu trừ (4)', (slip.deductions?.tong_khau_tru || 0)],
     },
