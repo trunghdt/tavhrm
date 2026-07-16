@@ -130,6 +130,7 @@ export default function ImportPayrollModal({ onClose, onSuccess }) {
           tru_chuyen_can: n(row[COL.tru_chuyen_can]),
           tich_luy_hien_tai: n(row[COL.tich_luy_hien_tai]),
           net_salary: n(row[COL.thuc_linh]),
+          tich_luy_hien_tai: n(row[COL.tich_luy_hien_tai]),
           tien_tich_luy: n(row[COL.tien_tich_luy]),
         })
       }
@@ -228,6 +229,7 @@ const existing = existingList?.[0] || null
           // Thưởng
           thuong_tich_luy_tet: r.thuong_tich_luy_tet,
           tien_tich_luy: r.tien_tich_luy,
+          tich_luy_hien_tai: r.tich_luy_hien_tai,
           thuong_quan_ly: r.thuong_quan_ly,
           thuong_nang_suat: r.thuong_nang_suat,
           bu_luong_thang_truoc: r.bu_luong_thang_truoc,
